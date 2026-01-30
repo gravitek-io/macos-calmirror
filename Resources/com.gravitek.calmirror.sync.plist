@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  CalMirror launchd agent template (T006)
+
+  This plist is a template bundled with the application resources.
+  The ProgramArguments binary path (/usr/local/bin/calmirror) is a placeholder
+  and will be replaced with the actual installed binary path by LaunchdManager
+  during installation.
+-->
+<plist version="1.0">
+<dict>
+	<!-- Unique identifier for the launchd job -->
+	<key>Label</key>
+	<string>com.gravitek.calmirror.sync</string>
+
+	<!-- Command to execute: binary path + sync sub-command -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/calmirror</string>
+		<string>sync</string>
+	</array>
+
+	<!-- Run every 900 seconds (15 minutes) -->
+	<key>StartInterval</key>
+	<integer>900</integer>
+
+	<!-- Mark as background process to reduce resource priority -->
+	<key>ProcessType</key>
+	<string>Background</string>
+
+	<!-- Log stdout and stderr for debugging -->
+	<key>StandardOutPath</key>
+	<string>/tmp/calmirror.stdout.log</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/calmirror.stderr.log</string>
+
+	<!-- Execute immediately when the agent is loaded (at login) -->
+	<key>RunAtLoad</key>
+	<true/>
+</dict>
+</plist>

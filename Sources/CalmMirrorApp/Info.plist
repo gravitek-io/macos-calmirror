@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Bundle identity -->
+    <key>CFBundleIdentifier</key>
+    <string>com.gravitek.calmirror</string>
+
+    <key>CFBundleName</key>
+    <string>CalMirror</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>CalMirror</string>
+
+    <!-- Versioning -->
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+
+    <!-- Bundle type and executable -->
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <key>CFBundleExecutable</key>
+    <string>CalmMirrorApp</string>
+
+    <!-- Standard windowed app: visible in Dock -->
+    <key>LSUIElement</key>
+    <false/>
+
+    <!-- Calendar access permission prompts -->
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>CalMirror needs access to your calendars to read source events and create blocker events in target calendars.</string>
+
+    <!-- Backward compatibility for older macOS versions -->
+    <key>NSCalendarsUsageDescription</key>
+    <string>CalMirror needs access to your calendars to read source events and create blocker events in target calendars.</string>
+
+    <!-- Minimum macOS version -->
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+</dict>
+</plist>
