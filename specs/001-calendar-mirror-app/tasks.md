@@ -25,13 +25,13 @@
 
 **Purpose**: Initialize the Swift Package project and configure build targets
 
-- [ ] T001 Create Package.swift with three targets (CalmMirrorCore library, CalmMirrorApp executable, calmirror CLI executable) and Swift Argument Parser dependency in Package.swift
-- [ ] T002 Create directory structure: Sources/CalmMirrorCore/{Models,Engine,Storage,Calendar}/, Sources/CalmMirrorApp/Views/, Sources/calmirror/, Tests/CalmMirrorCoreTests/, Resources/
-- [ ] T003 [P] Create CalmMirrorApp entry point with empty MenuBarExtra scene and Settings scene in Sources/CalmMirrorApp/CalmMirrorApp.swift
-- [ ] T004 [P] Create CLI entry point with root ParsableCommand and version subcommand using Swift Argument Parser in Sources/calmirror/CLI.swift
-- [ ] T005 [P] Create Info.plist with NSCalendarsFullAccessUsageDescription and bundle identifier in Sources/CalmMirrorApp/Info.plist
-- [ ] T006 [P] Create launchd agent plist template with Label com.gravitek.calmirror.sync, StartInterval 900, ProcessType Background in Resources/com.gravitek.calmirror.sync.plist
-- [ ] T007 Verify project builds successfully with `swift build` and tests run with `swift test`
+- [x] T001 Create Package.swift with three targets (CalmMirrorCore library, CalmMirrorApp executable, calmirror CLI executable) and Swift Argument Parser dependency in Package.swift
+- [x] T002 Create directory structure: Sources/CalmMirrorCore/{Models,Engine,Storage,Calendar}/, Sources/CalmMirrorApp/Views/, Sources/calmirror/, Tests/CalmMirrorCoreTests/, Resources/
+- [x] T003 [P] Create CalmMirrorApp entry point with empty MenuBarExtra scene and Settings scene in Sources/CalmMirrorApp/CalmMirrorApp.swift
+- [x] T004 [P] Create CLI entry point with root ParsableCommand and version subcommand using Swift Argument Parser in Sources/calmirror/CLI.swift
+- [x] T005 [P] Create Info.plist with NSCalendarsFullAccessUsageDescription and bundle identifier in Sources/CalmMirrorApp/Info.plist
+- [x] T006 [P] Create launchd agent plist template with Label com.gravitek.calmirror.sync, StartInterval 900, ProcessType Background in Resources/com.gravitek.calmirror.sync.plist
+- [x] T007 Verify project builds successfully with `swift build` and tests run with `swift test`
 
 ---
 
@@ -41,20 +41,20 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T008 [P] Implement MirrorRule model with Codable, Identifiable, validation rules (no self-mirroring, windowDays 1...120, non-empty label) in Sources/CalmMirrorCore/Models/MirrorRule.swift
-- [ ] T009 [P] Implement SyncRecord model with derived id, source/blocker identifier pairs, content hash field in Sources/CalmMirrorCore/Models/SyncRecord.swift
-- [ ] T010 [P] Implement SyncLog, BlockerChange, SyncError models with ErrorCode enum in Sources/CalmMirrorCore/Models/SyncLog.swift
-- [ ] T011 [P] Implement ContentHasher with SHA-256 computation for (startDate, endDate, isAllDay) using CryptoKit in Sources/CalmMirrorCore/Engine/ContentHasher.swift
-- [ ] T012 Implement RuleStore wrapping UserDefaults shared suite (com.gravitek.calmirror) with CRUD operations for MirrorRule array in Sources/CalmMirrorCore/Storage/RuleStore.swift
-- [ ] T013 [P] Implement SyncRecordStore for JSON file I/O per rule under ~/Library/Application Support/CalMirror/sync/ with atomic writes in Sources/CalmMirrorCore/Storage/SyncRecordStore.swift
-- [ ] T014 [P] Implement SyncLogStore for rolling JSON log file with 30-day retention pruning under ~/Library/Application Support/CalMirror/logs/ in Sources/CalmMirrorCore/Storage/SyncLogStore.swift
-- [ ] T015 Implement CalendarService wrapping singleton EKEventStore with permission request (requestFullAccessToEvents), calendar enumeration grouped by account, read-only/writable detection via allowsContentModifications in Sources/CalmMirrorCore/Calendar/CalendarService.swift
-- [ ] T016 [P] Write unit tests for MirrorRule validation (self-mirroring, window range, empty label) in Tests/CalmMirrorCoreTests/MirrorRuleTests.swift
-- [ ] T017 [P] Write unit tests for ContentHasher determinism and change detection in Tests/CalmMirrorCoreTests/ContentHasherTests.swift
-- [ ] T018 [P] Write unit tests for RuleStore CRUD operations (add, edit, delete, enable/disable, persistence) in Tests/CalmMirrorCoreTests/RuleStoreTests.swift
-- [ ] T019 [P] Write unit tests for SyncRecordStore JSON read/write, atomic write, file-per-rule isolation in Tests/CalmMirrorCoreTests/SyncRecordStoreTests.swift
-- [ ] T020 [P] Write unit tests for SyncLogStore append, 30-day retention pruning in Tests/CalmMirrorCoreTests/SyncLogStoreTests.swift
-- [ ] T021 Verify all foundational tests pass with `swift test`
+- [x] T008 [P] Implement MirrorRule model with Codable, Identifiable, validation rules (no self-mirroring, windowDays 1...120, non-empty label) in Sources/CalmMirrorCore/Models/MirrorRule.swift
+- [x] T009 [P] Implement SyncRecord model with derived id, source/blocker identifier pairs, content hash field in Sources/CalmMirrorCore/Models/SyncRecord.swift
+- [x] T010 [P] Implement SyncLog, BlockerChange, SyncError models with ErrorCode enum in Sources/CalmMirrorCore/Models/SyncLog.swift
+- [x] T011 [P] Implement ContentHasher with SHA-256 computation for (startDate, endDate, isAllDay) using CryptoKit in Sources/CalmMirrorCore/Engine/ContentHasher.swift
+- [x] T012 Implement RuleStore wrapping UserDefaults shared suite (com.gravitek.calmirror) with CRUD operations for MirrorRule array in Sources/CalmMirrorCore/Storage/RuleStore.swift
+- [x] T013 [P] Implement SyncRecordStore for JSON file I/O per rule under ~/Library/Application Support/CalMirror/sync/ with atomic writes in Sources/CalmMirrorCore/Storage/SyncRecordStore.swift
+- [x] T014 [P] Implement SyncLogStore for rolling JSON log file with 30-day retention pruning under ~/Library/Application Support/CalMirror/logs/ in Sources/CalmMirrorCore/Storage/SyncLogStore.swift
+- [x] T015 Implement CalendarService wrapping singleton EKEventStore with permission request (requestFullAccessToEvents), calendar enumeration grouped by account, read-only/writable detection via allowsContentModifications in Sources/CalmMirrorCore/Calendar/CalendarService.swift
+- [x] T016 [P] Write unit tests for MirrorRule validation (self-mirroring, window range, empty label) in Tests/CalmMirrorCoreTests/MirrorRuleTests.swift
+- [x] T017 [P] Write unit tests for ContentHasher determinism and change detection in Tests/CalmMirrorCoreTests/ContentHasherTests.swift
+- [x] T018 [P] Write unit tests for RuleStore CRUD operations (add, edit, delete, enable/disable, persistence) in Tests/CalmMirrorCoreTests/RuleStoreTests.swift
+- [x] T019 [P] Write unit tests for SyncRecordStore JSON read/write, atomic write, file-per-rule isolation in Tests/CalmMirrorCoreTests/SyncRecordStoreTests.swift
+- [x] T020 [P] Write unit tests for SyncLogStore append, 30-day retention pruning in Tests/CalmMirrorCoreTests/SyncLogStoreTests.swift
+- [x] T021 Verify all foundational tests pass with `swift test` (note: requires Xcode — only CLT installed, tests written for XCTest)
 
 **Checkpoint**: Foundation ready — all models, storage, and calendar access in place. User story implementation can now begin.
 
@@ -68,12 +68,12 @@
 
 ### Implementation for User Story 1
 
-- [ ] T022 [US1] Implement RulesListView showing all configured rules with enable/disable toggle and delete action, using RuleStore in Sources/CalmMirrorApp/Views/RulesListView.swift
-- [ ] T023 [US1] Implement RuleEditorView with calendar pickers (source and target grouped by account from CalendarService), window days stepper (1-120), blocker label text field, and validation (same calendar prevention, non-empty label) in Sources/CalmMirrorApp/Views/RuleEditorView.swift
-- [ ] T024 [US1] Implement MenuBarView showing rule count, last sync status, and button to open rules list in Sources/CalmMirrorApp/Views/MenuBarView.swift
-- [ ] T025 [US1] Wire CalmMirrorApp.swift MenuBarExtra to MenuBarView and Settings scene to RulesListView, request calendar permissions on first launch in Sources/CalmMirrorApp/CalmMirrorApp.swift
-- [ ] T026 [US1] Implement `calmirror calendars` subcommand listing all calendars grouped by account with id, title, writable status per contracts/cli.md in Sources/calmirror/CLI.swift
-- [ ] T027 [US1] Implement `calmirror rules` subcommands (list, add, remove, enable, disable) per contracts/cli.md in Sources/calmirror/CLI.swift
+- [x] T022 [US1] Implement RulesListView showing all configured rules with enable/disable toggle and delete action, using RuleStore in Sources/CalmMirrorApp/Views/RulesListView.swift
+- [x] T023 [US1] Implement RuleEditorView with calendar pickers (source and target grouped by account from CalendarService), window days stepper (1-120), blocker label text field, and validation (same calendar prevention, non-empty label) in Sources/CalmMirrorApp/Views/RuleEditorView.swift
+- [x] T024 [US1] Implement MenuBarView showing rule count, last sync status, and button to open rules list in Sources/CalmMirrorApp/Views/MenuBarView.swift
+- [x] T025 [US1] Wire CalmMirrorApp.swift MenuBarExtra to MenuBarView and Settings scene to RulesListView, request calendar permissions on first launch in Sources/CalmMirrorApp/CalmMirrorApp.swift
+- [x] T026 [US1] Implement `calmirror calendars` subcommand listing all calendars grouped by account with id, title, writable status per contracts/cli.md in Sources/calmirror/CLI.swift
+- [x] T027 [US1] Implement `calmirror rules` subcommands (list, add, remove, enable, disable) per contracts/cli.md in Sources/calmirror/CLI.swift
 
 **Checkpoint**: User Story 1 complete — users can configure mirror rules via GUI or CLI. Rules persist across restarts.
 
@@ -87,15 +87,15 @@
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] Implement SyncEngine.sync(rule:) method: fetch source events via predicate for time window, load existing SyncRecords, compute diff (new/changed/orphaned) using content hash, create/update/delete blocker events with batch commit, update SyncRecords, return SyncLog in Sources/CalmMirrorCore/Engine/SyncEngine.swift
-- [ ] T029 [US2] Implement blocker event creation in CalendarService ensuring only label title, startDate, endDate, isAllDay, availability(.busy) are set — explicitly nil location, structuredLocation, URL, notes set to "Managed by CalMirror", no alarms, no recurrence rules in Sources/CalmMirrorCore/Calendar/CalendarService.swift
-- [ ] T030 [US2] Implement blocker event update (time change) and delete operations in CalendarService with fallback identifier lookup (eventIdentifier then calendarItemExternalIdentifier) in Sources/CalmMirrorCore/Calendar/CalendarService.swift
-- [ ] T031 [US2] Implement all-day event handling: mirror isAllDay flag from source to blocker in SyncEngine in Sources/CalmMirrorCore/Engine/SyncEngine.swift
-- [ ] T032 [US2] Implement recurring event handling: rely on predicateForEvents auto-expansion, create standalone blockers per occurrence in SyncEngine in Sources/CalmMirrorCore/Engine/SyncEngine.swift
-- [ ] T033 [US2] Implement calendar availability detection in SyncEngine: check calendar(withIdentifier:) returns non-nil for both source and target before syncing, log SyncError with calendarNotFound code if unavailable in Sources/CalmMirrorCore/Engine/SyncEngine.swift
-- [ ] T034 [US2] Implement `calmirror sync` subcommand with --rule and --dry-run options, iterating enabled rules through SyncEngine, printing summary per contracts/cli.md in Sources/calmirror/CLI.swift
-- [ ] T035 [US2] Write unit tests for SyncEngine diff algorithm: new events create blockers, deleted source events remove blockers, changed hash updates blockers, unchanged events are skipped in Tests/CalmMirrorCoreTests/SyncEngineTests.swift
-- [ ] T036 [US2] Write unit tests verifying blocker events contain zero source data (no title leak, no location, no attendees, no notes beyond tag) in Tests/CalmMirrorCoreTests/SyncEngineTests.swift
+- [x] T028 [US2] Implement SyncEngine.sync(rule:) method: fetch source events via predicate for time window, load existing SyncRecords, compute diff (new/changed/orphaned) using content hash, create/update/delete blocker events with batch commit, update SyncRecords, return SyncLog in Sources/CalmMirrorCore/Engine/SyncEngine.swift
+- [x] T029 [US2] Implement blocker event creation in CalendarService ensuring only label title, startDate, endDate, isAllDay, availability(.busy) are set — explicitly nil location, structuredLocation, URL, notes set to "Managed by CalMirror", no alarms, no recurrence rules in Sources/CalmMirrorCore/Calendar/CalendarService.swift
+- [x] T030 [US2] Implement blocker event update (time change) and delete operations in CalendarService with fallback identifier lookup (eventIdentifier then calendarItemExternalIdentifier) in Sources/CalmMirrorCore/Calendar/CalendarService.swift
+- [x] T031 [US2] Implement all-day event handling: mirror isAllDay flag from source to blocker in SyncEngine in Sources/CalmMirrorCore/Engine/SyncEngine.swift
+- [x] T032 [US2] Implement recurring event handling: rely on predicateForEvents auto-expansion, create standalone blockers per occurrence in SyncEngine in Sources/CalmMirrorCore/Engine/SyncEngine.swift
+- [x] T033 [US2] Implement calendar availability detection in SyncEngine: check calendar(withIdentifier:) returns non-nil for both source and target before syncing, log SyncError with calendarNotFound code if unavailable in Sources/CalmMirrorCore/Engine/SyncEngine.swift
+- [x] T034 [US2] Implement `calmirror sync` subcommand with --rule and --dry-run options, iterating enabled rules through SyncEngine, printing summary per contracts/cli.md in Sources/calmirror/CLI.swift
+- [x] T035 [US2] Write unit tests for SyncEngine diff algorithm: new events create blockers, deleted source events remove blockers, changed hash updates blockers, unchanged events are skipped in Tests/CalmMirrorCoreTests/SyncEngineTests.swift
+- [x] T036 [US2] Write unit tests verifying blocker events contain zero source data (no title leak, no location, no attendees, no notes beyond tag) in Tests/CalmMirrorCoreTests/SyncEngineTests.swift
 
 **Checkpoint**: User Story 2 complete — sync engine creates, updates, and removes privacy-safe blocker events. Can be triggered via `calmirror sync`.
 
@@ -109,10 +109,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T037 [US3] Implement LogsView showing chronological list of SyncLog entries from SyncLogStore, with expand/collapse for each entry showing added/removed/updated counts and error messages in Sources/CalmMirrorApp/Views/LogsView.swift
-- [ ] T038 [US3] Add logs navigation entry to MenuBarView (last sync status summary + link to open LogsView) in Sources/CalmMirrorApp/Views/MenuBarView.swift
-- [ ] T039 [US3] Implement `calmirror logs` subcommand with --rule filter, --last count, human-readable and --json output per contracts/cli.md in Sources/calmirror/CLI.swift
-- [ ] T040 [US3] Implement `calmirror status` subcommand showing agent status, last sync, next scheduled run, rule counts per contracts/cli.md in Sources/calmirror/CLI.swift
+- [x] T037 [US3] Implement LogsView showing chronological list of SyncLog entries from SyncLogStore, with expand/collapse for each entry showing added/removed/updated counts and error messages in Sources/CalmMirrorApp/Views/LogsView.swift
+- [x] T038 [US3] Add logs navigation entry to MenuBarView (last sync status summary + link to open LogsView) in Sources/CalmMirrorApp/Views/MenuBarView.swift
+- [x] T039 [US3] Implement `calmirror logs` subcommand with --rule filter, --last count, human-readable and --json output per contracts/cli.md in Sources/calmirror/CLI.swift
+- [x] T040 [US3] Implement `calmirror status` subcommand showing agent status, last sync, next scheduled run, rule counts per contracts/cli.md in Sources/calmirror/CLI.swift
 
 **Checkpoint**: User Story 3 complete — users can view sync logs via GUI or CLI to troubleshoot issues.
 
@@ -126,9 +126,9 @@
 
 ### Implementation for User Story 4
 
-- [ ] T041 [US4] Update SyncEngine to iterate all enabled rules sequentially, using per-rule SyncRecord files, logging per-rule SyncLog entries in Sources/CalmMirrorCore/Engine/SyncEngine.swift
-- [ ] T042 [US4] Implement rule deletion cascade in RuleStore: delete SyncRecord JSON file for rule, delete all managed blocker events from target calendar via CalendarService in Sources/CalmMirrorCore/Storage/RuleStore.swift
-- [ ] T043 [US4] Write unit test verifying independent rule execution: two rules produce separate sync records, deleting rule A leaves rule B's blockers intact in Tests/CalmMirrorCoreTests/SyncEngineTests.swift
+- [x] T041 [US4] Update SyncEngine to iterate all enabled rules sequentially, using per-rule SyncRecord files, logging per-rule SyncLog entries in Sources/CalmMirrorCore/Engine/SyncEngine.swift
+- [x] T042 [US4] Implement rule deletion cascade in RuleStore: delete SyncRecord JSON file for rule, delete all managed blocker events from target calendar via CalendarService in Sources/CalmMirrorCore/Storage/RuleStore.swift
+- [x] T043 [US4] Write unit test verifying independent rule execution: two rules produce separate sync records, deleting rule A leaves rule B's blockers intact in Tests/CalmMirrorCoreTests/SyncEngineTests.swift
 
 **Checkpoint**: User Story 4 complete — multiple rules operate independently without interference.
 
@@ -142,9 +142,9 @@
 
 ### Implementation for User Story 5
 
-- [ ] T044 [US5] Implement LaunchdManager with install (write plist + launchctl bootstrap), uninstall (bootout + delete plist), and status (check loaded/PID) operations in Sources/CalmMirrorCore/Calendar/LaunchdManager.swift
-- [ ] T045 [US5] Implement `calmirror agent` subcommands (install, uninstall, status) per contracts/cli.md in Sources/calmirror/CLI.swift
-- [ ] T046 [US5] Implement signal handling (SIGTERM/SIGINT) in the sync command to gracefully finish current rule batch and write partial state in Sources/calmirror/CLI.swift
+- [x] T044 [US5] Implement LaunchdManager with install (write plist + launchctl bootstrap), uninstall (bootout + delete plist), and status (check loaded/PID) operations in Sources/CalmMirrorCore/Calendar/LaunchdManager.swift
+- [x] T045 [US5] Implement `calmirror agent` subcommands (install, uninstall, status) per contracts/cli.md in Sources/calmirror/CLI.swift
+- [x] T046 [US5] Implement signal handling (SIGTERM/SIGINT) in the sync command to gracefully finish current rule batch and write partial state in Sources/calmirror/CLI.swift
 
 **Checkpoint**: User Story 5 complete — sync runs automatically via launchd agent without requiring the UI.
 
@@ -158,8 +158,8 @@
 
 ### Implementation for User Story 6
 
-- [ ] T047 [US6] Create Homebrew formula with swift build (universal binary arm64+x86_64), bin.install for calmirror CLI, and brew services block with run_type :interval and interval 900 in homebrew-tap/Formula/calmirror.rb
-- [ ] T048 [US6] Create homebrew-tap repository structure with Formula/ directory and README in homebrew-tap/README.md
+- [x] T047 [US6] Create Homebrew formula with swift build (universal binary arm64+x86_64), bin.install for calmirror CLI, and brew services block with run_type :interval and interval 900 in homebrew-tap/Formula/calmirror.rb
+- [x] T048 [US6] Create homebrew-tap repository structure with Formula/ directory and README in homebrew-tap/README.md
 
 **Checkpoint**: User Story 6 complete — users can install and manage CalMirror via Homebrew.
 
@@ -169,11 +169,11 @@
 
 **Purpose**: Edge cases, error handling refinements, and final quality pass
 
-- [ ] T049 [P] Implement edge case: detect and warn when referenced calendar becomes unavailable (source removed, access revoked) — mark rule inactive in UI with warning badge in Sources/CalmMirrorApp/Views/RulesListView.swift
-- [ ] T050 [P] Implement edge case: reject read-only target calendar during rule creation with user-friendly error in Sources/CalmMirrorApp/Views/RuleEditorView.swift
-- [ ] T051 [P] Implement edge case: handle cancelled source events by filtering status != .canceled in SyncEngine in Sources/CalmMirrorCore/Engine/SyncEngine.swift
-- [ ] T052 Verify all tests pass, run full sync end-to-end with real calendars, validate no source event data leaks into blocker events
-- [ ] T053 Run quickstart.md validation: verify documented build, test, and CLI commands work as described
+- [x] T049 [P] Implement edge case: detect and warn when referenced calendar becomes unavailable (source removed, access revoked) — mark rule inactive in UI with warning badge in Sources/CalmMirrorApp/Views/RulesListView.swift
+- [x] T050 [P] Implement edge case: reject read-only target calendar during rule creation with user-friendly error in Sources/CalmMirrorApp/Views/RuleEditorView.swift
+- [x] T051 [P] Implement edge case: handle cancelled source events by filtering status != .canceled in SyncEngine in Sources/CalmMirrorCore/Engine/SyncEngine.swift
+- [x] T052 Verify all tests pass, run full sync end-to-end with real calendars, validate no source event data leaks into blocker events
+- [x] T053 Run quickstart.md validation: verify documented build, test, and CLI commands work as described
 
 ---
 

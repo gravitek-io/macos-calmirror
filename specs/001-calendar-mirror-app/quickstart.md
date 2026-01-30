@@ -28,13 +28,14 @@ CalmMirror/
 ├── Package.swift                       # SPM manifest
 ├── Sources/
 │   ├── CalmMirrorCore/                 # Shared library (models, sync engine, storage)
+│   │   ├── CalmMirrorCore.swift        # Module namespace & version
 │   │   ├── Models/
 │   │   │   ├── MirrorRule.swift
 │   │   │   ├── SyncRecord.swift
 │   │   │   └── SyncLog.swift
 │   │   ├── Engine/
 │   │   │   ├── SyncEngine.swift
-│   │   │   └── EventMatcher.swift
+│   │   │   └── ContentHasher.swift
 │   │   ├── Storage/
 │   │   │   ├── RuleStore.swift         # UserDefaults wrapper
 │   │   │   ├── SyncRecordStore.swift   # JSON file per rule
@@ -54,10 +55,13 @@ CalmMirror/
 │       └── CLI.swift                   # Swift Argument Parser entry point
 ├── Tests/
 │   └── CalmMirrorCoreTests/
-│       ├── SyncEngineTests.swift
-│       ├── EventMatcherTests.swift
+│       ├── CalmMirrorCoreTests.swift
+│       ├── MirrorRuleTests.swift
+│       ├── ContentHasherTests.swift
 │       ├── RuleStoreTests.swift
-│       └── SyncRecordStoreTests.swift
+│       ├── SyncRecordStoreTests.swift
+│       ├── SyncLogStoreTests.swift
+│       └── SyncEngineTests.swift
 └── Resources/
     └── com.gravitek.calmirror.sync.plist  # launchd agent template
 ```
