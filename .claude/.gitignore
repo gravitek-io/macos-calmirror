@@ -1,0 +1,12 @@
+# Work in progress files
+analysis/*.md
+!analysis/.gitkeep
+
+plans/*.md
+!plans/.gitkeep
+
+# Archive of completed work
+archive/
+
+# Backup files
+*.backup
