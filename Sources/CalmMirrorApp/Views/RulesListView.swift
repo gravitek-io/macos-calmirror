@@ -117,7 +117,7 @@ struct RulesListView: View {
             // Rule summary on the leading side
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
-                    Text(rule.blockerLabel)
+                    Text(rule.title)
                         .font(.headline)
                         .lineLimit(1)
 

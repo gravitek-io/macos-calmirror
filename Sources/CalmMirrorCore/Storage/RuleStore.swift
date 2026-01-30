@@ -87,6 +87,7 @@ public final class RuleStore: @unchecked Sendable {
     /// - Throws: `MirrorRule.ValidationError` if the rule's configuration is invalid.
     public func addRule(_ rule: MirrorRule) throws {
         if let validationError = MirrorRule.validate(
+            title: rule.title,
             sourceCalendarIdentifier: rule.sourceCalendarIdentifier,
             targetCalendarIdentifier: rule.targetCalendarIdentifier,
             windowDays: rule.windowDays,

@@ -7,6 +7,7 @@ final class MirrorRuleTests: XCTestCase {
 
     // MARK: - Test Data
 
+    private let validTitle = "Work Mirror"
     private let validSource = "source-calendar-id"
     private let validTarget = "target-calendar-id"
     private let validWindowDays = 14
@@ -19,6 +20,7 @@ final class MirrorRuleTests: XCTestCase {
     func testValidRuleCreation() {
         let before = Date()
         let rule = MirrorRule(
+            title: validTitle,
             sourceCalendarIdentifier: validSource,
             targetCalendarIdentifier: validTarget,
             windowDays: validWindowDays,
@@ -26,6 +28,7 @@ final class MirrorRuleTests: XCTestCase {
         )
         let after = Date()
 
+        XCTAssertEqual(rule.title, validTitle)
         XCTAssertEqual(rule.sourceCalendarIdentifier, validSource)
         XCTAssertEqual(rule.targetCalendarIdentifier, validTarget)
         XCTAssertEqual(rule.windowDays, validWindowDays)
@@ -48,6 +51,7 @@ final class MirrorRuleTests: XCTestCase {
     /// Validate returns `nil` when all parameters satisfy the business rules.
     func testValidationPassesForValidInput() {
         let error = MirrorRule.validate(
+            title: validTitle,
             sourceCalendarIdentifier: validSource,
             targetCalendarIdentifier: validTarget,
             windowDays: validWindowDays,
@@ -56,11 +60,38 @@ final class MirrorRuleTests: XCTestCase {
         XCTAssertNil(error, "Valid input should produce no validation error")
     }
 
+    // MARK: - Validation — Title
+
+    /// An empty title must return `.emptyTitle`.
+    func testEmptyTitleValidation() {
+        let error = MirrorRule.validate(
+            title: "",
+            sourceCalendarIdentifier: validSource,
+            targetCalendarIdentifier: validTarget,
+            windowDays: validWindowDays,
+            blockerLabel: validLabel
+        )
+        XCTAssertEqual(error, .emptyTitle)
+    }
+
+    /// A whitespace-only title must return `.emptyTitle` (trimmed check).
+    func testWhitespaceOnlyTitleValidation() {
+        let error = MirrorRule.validate(
+            title: "   ",
+            sourceCalendarIdentifier: validSource,
+            targetCalendarIdentifier: validTarget,
+            windowDays: validWindowDays,
+            blockerLabel: validLabel
+        )
+        XCTAssertEqual(error, .emptyTitle)
+    }
+
     // MARK: - Validation — Self-Mirroring
 
     /// Source and target pointing to the same calendar must return `.selfMirroring`.
     func testSelfMirroringValidation() {
         let error = MirrorRule.validate(
+            title: validTitle,
             sourceCalendarIdentifier: validSource,
             targetCalendarIdentifier: validSource,
             windowDays: validWindowDays,
@@ -74,6 +105,7 @@ final class MirrorRuleTests: XCTestCase {
     /// A window below the minimum (< 1) must return `.windowOutOfRange`.
     func testWindowTooLow() {
         let error = MirrorRule.validate(
+            title: validTitle,
             sourceCalendarIdentifier: validSource,
             targetCalendarIdentifier: validTarget,
             windowDays: 0,
@@ -85,6 +117,7 @@ final class MirrorRuleTests: XCTestCase {
     /// A window above the maximum (> 120) must return `.windowOutOfRange`.
     func testWindowTooHigh() {
         let error = MirrorRule.validate(
+            title: validTitle,
             sourceCalendarIdentifier: validSource,
             targetCalendarIdentifier: validTarget,
             windowDays: 121,
@@ -96,6 +129,7 @@ final class MirrorRuleTests: XCTestCase {
     /// The lower boundary (1 day) is within the valid range.
     func testWindowBoundaryLow() {
         let error = MirrorRule.validate(
+            title: validTitle,
             sourceCalendarIdentifier: validSource,
             targetCalendarIdentifier: validTarget,
             windowDays: 1,
@@ -107,6 +141,7 @@ final class MirrorRuleTests: XCTestCase {
     /// The upper boundary (120 days) is within the valid range.
     func testWindowBoundaryHigh() {
         let error = MirrorRule.validate(
+            title: validTitle,
             sourceCalendarIdentifier: validSource,
             targetCalendarIdentifier: validTarget,
             windowDays: 120,
@@ -120,6 +155,7 @@ final class MirrorRuleTests: XCTestCase {
     /// An empty string label must return `.emptyLabel`.
     func testEmptyLabelValidation() {
         let error = MirrorRule.validate(
+            title: validTitle,
             sourceCalendarIdentifier: validSource,
             targetCalendarIdentifier: validTarget,
             windowDays: validWindowDays,
@@ -131,6 +167,7 @@ final class MirrorRuleTests: XCTestCase {
     /// A whitespace-only label must return `.emptyLabel` (trimmed check).
     func testWhitespaceOnlyLabelValidation() {
         let error = MirrorRule.validate(
+            title: validTitle,
             sourceCalendarIdentifier: validSource,
             targetCalendarIdentifier: validTarget,
             windowDays: validWindowDays,
@@ -146,6 +183,7 @@ final class MirrorRuleTests: XCTestCase {
     func testCodableRoundTrip() throws {
         let original = MirrorRule(
             id: UUID(),
+            title: validTitle,
             sourceCalendarIdentifier: validSource,
             targetCalendarIdentifier: validTarget,
             windowDays: validWindowDays,
@@ -162,6 +200,7 @@ final class MirrorRuleTests: XCTestCase {
         let decoded = try decoder.decode(MirrorRule.self, from: data)
 
         XCTAssertEqual(decoded.id, original.id)
+        XCTAssertEqual(decoded.title, original.title)
         XCTAssertEqual(decoded.sourceCalendarIdentifier, original.sourceCalendarIdentifier)
         XCTAssertEqual(decoded.targetCalendarIdentifier, original.targetCalendarIdentifier)
         XCTAssertEqual(decoded.windowDays, original.windowDays)
@@ -179,5 +218,38 @@ final class MirrorRuleTests: XCTestCase {
             accuracy: 0.001,
             "updatedAt must survive JSON round trip"
         )
+    }
+
+    // MARK: - Backward-Compatible Decoding
+
+    /// Decoding a rule without a `title` field should default to `blockerLabel`.
+    ///
+    /// This ensures existing rules persisted before the `title` property was
+    /// introduced remain readable and display the blocker label as fallback.
+    func testBackwardCompatibleDecodingWithoutTitle() throws {
+        // JSON payload without the "title" key, simulating a pre-existing rule.
+        let jsonString = """
+        {
+            "id": "12345678-1234-1234-1234-123456789ABC",
+            "sourceCalendarIdentifier": "\(validSource)",
+            "targetCalendarIdentifier": "\(validTarget)",
+            "windowDays": \(validWindowDays),
+            "blockerLabel": "\(validLabel)",
+            "isEnabled": true,
+            "createdAt": 1700000000,
+            "updatedAt": 1700001000
+        }
+        """
+        let data = Data(jsonString.utf8)
+
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(MirrorRule.self, from: data)
+
+        XCTAssertEqual(
+            decoded.title,
+            validLabel,
+            "title should default to blockerLabel when absent from JSON"
+        )
+        XCTAssertEqual(decoded.blockerLabel, validLabel)
     }
 }

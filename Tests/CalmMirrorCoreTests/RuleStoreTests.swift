@@ -41,6 +41,7 @@ final class RuleStoreTests: XCTestCase {
     /// Creates a valid `MirrorRule` with distinct source/target calendars.
     private func makeRule(
         id: UUID = UUID(),
+        title: String = "Test Rule",
         source: String = "source-calendar",
         target: String = "target-calendar",
         windowDays: Int = 14,
@@ -50,6 +51,7 @@ final class RuleStoreTests: XCTestCase {
         let now = Date()
         return MirrorRule(
             id: id,
+            title: title,
             sourceCalendarIdentifier: source,
             targetCalendarIdentifier: target,
             windowDays: windowDays,
@@ -117,6 +119,19 @@ final class RuleStoreTests: XCTestCase {
                 return XCTFail("Expected MirrorRule.ValidationError, got \(type(of: error))")
             }
             XCTAssertEqual(validationError, .emptyLabel)
+        }
+        XCTAssertTrue(store.loadRules().isEmpty, "Invalid rule should not be persisted")
+    }
+
+    /// Adding a rule with an empty (or whitespace-only) title throws `emptyTitle`.
+    func testAddRuleValidationRejectsEmptyTitle() {
+        let rule = makeRule(title: "   ")
+
+        XCTAssertThrowsError(try store.addRule(rule)) { error in
+            guard let validationError = error as? MirrorRule.ValidationError else {
+                return XCTFail("Expected MirrorRule.ValidationError, got \(type(of: error))")
+            }
+            XCTAssertEqual(validationError, .emptyTitle)
         }
         XCTAssertTrue(store.loadRules().isEmpty, "Invalid rule should not be persisted")
     }
