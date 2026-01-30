@@ -272,7 +272,7 @@ extension CalmMirror {
     /// Usage:
     /// ```
     /// calmirror rules list
-    /// calmirror rules add --source <id> --target <id> --window <days> --label <text>
+    /// calmirror rules add --title <name> --source <id> --target <id> --window <days> --label <text>
     /// calmirror rules remove <uuid>
     /// calmirror rules enable <uuid>
     /// calmirror rules disable <uuid>
@@ -335,12 +335,12 @@ extension CalmMirror.Rules {
 
         /// Prints rules as a human-readable table with aligned columns.
         ///
-        /// Columns: ID (8-char), LABEL, SOURCE (8-char), TARGET (8-char), WINDOW, STATUS
+        /// Columns: ID (8-char), TITLE, SOURCE (8-char), TARGET (8-char), WINDOW, STATUS
         private func printRulesHuman(_ rules: [MirrorRule]) {
             // Header
             let header = String(
                 format: "%-10s %-24s %-10s %-10s %-8s %s",
-                "ID", "LABEL", "SOURCE", "TARGET", "WINDOW", "STATUS"
+                "ID", "TITLE", "SOURCE", "TARGET", "WINDOW", "STATUS"
             )
             print(header)
 
@@ -348,7 +348,7 @@ extension CalmMirror.Rules {
                 let line = String(
                     format: "%-10s %-24s %-10s %-10s %-8s %s",
                     (shortID(rule.id.uuidString) as NSString).utf8String!,
-                    (truncateLabel(rule.blockerLabel, maxLength: 24) as NSString).utf8String!,
+                    (truncateLabel(rule.title, maxLength: 24) as NSString).utf8String!,
                     (shortID(rule.sourceCalendarIdentifier) as NSString).utf8String!,
                     (shortID(rule.targetCalendarIdentifier) as NSString).utf8String!,
                     ("\(rule.windowDays)d" as NSString).utf8String!,
@@ -412,6 +412,9 @@ extension CalmMirror.Rules {
             abstract: "Add a new sync rule"
         )
 
+        @Option(name: .long, help: "Human-readable name for this rule")
+        var title: String
+
         @Option(name: .long, help: "Calendar identifier for the source")
         var source: String
 
@@ -426,6 +429,12 @@ extension CalmMirror.Rules {
 
         func run() throws {
             requireCalendarAccess()
+
+            // Validate title is not empty.
+            if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                writeToStderr("error: title must not be empty.")
+                Darwin.exit(3)
+            }
 
             // Validate source calendar exists.
             guard let sourceCal = CalendarService.shared.calendar(withIdentifier: source) else {
@@ -465,6 +474,7 @@ extension CalmMirror.Rules {
 
             // Create and persist the rule.
             let rule = MirrorRule(
+                title: title,
                 sourceCalendarIdentifier: source,
                 targetCalendarIdentifier: target,
                 windowDays: window,
@@ -484,6 +494,7 @@ extension CalmMirror.Rules {
             let targetAccount = targetCal.source?.title ?? "Unknown"
 
             print("Rule created: \(rule.id.uuidString)")
+            print("  Title:  \(title)")
             print("  Source: \(sourceCal.title) (\(sourceAccount))")
             print("  Target: \(targetCal.title) (\(targetAccount))")
             print("  Window: \(window) days")
@@ -528,7 +539,7 @@ extension CalmMirror.Rules {
                     syncRecordStore: syncRecordStore,
                     calendarService: CalendarService.shared
                 )
-                print("Rule removed: \(result.rule.id.uuidString) (\"\(result.rule.blockerLabel)\")")
+                print("Rule removed: \(result.rule.id.uuidString) (\"\(result.rule.title)\")")
                 if result.blockersRemoved > 0 {
                     print("Cleaned up \(result.blockersRemoved) blocker event\(result.blockersRemoved == 1 ? "" : "s") from target calendar.")
                 }
@@ -573,7 +584,7 @@ extension CalmMirror.Rules {
             do {
                 try store.enableRule(id: ruleID)
                 let rule = store.rule(for: ruleID)
-                let label = rule?.blockerLabel ?? "unknown"
+                let label = rule?.title ?? "unknown"
                 print("Rule enabled: \(shortID(ruleID.uuidString)) (\"\(label)\")")
             } catch is RuleStoreError {
                 writeToStderr("error: rule '\(uuid)' not found.")
@@ -617,7 +628,7 @@ extension CalmMirror.Rules {
             do {
                 try store.disableRule(id: ruleID)
                 let rule = store.rule(for: ruleID)
-                let label = rule?.blockerLabel ?? "unknown"
+                let label = rule?.title ?? "unknown"
                 print("Rule disabled: \(shortID(ruleID.uuidString)) (\"\(label)\")")
                 print("Existing blockers are preserved. Use 'calmirror rules remove' to also clean up blockers.")
             } catch is RuleStoreError {
@@ -819,7 +830,7 @@ extension CalmMirror {
             var totalUpdated = 0
 
             for log in logs {
-                let label = ruleLookup[log.ruleId]?.blockerLabel ?? "Unknown"
+                let label = ruleLookup[log.ruleId]?.title ?? "Unknown"
                 let ruleShortID = shortID(log.ruleId.uuidString)
 
                 print(
@@ -1053,7 +1064,7 @@ extension CalmMirror {
             for log in logs.reversed() {
                 let timestamp = dateFormatter.string(from: log.timestamp)
                 let result = log.isSuccess ? "OK    " : "ERROR "
-                let ruleLabel = ruleStore.rule(for: log.ruleId)?.blockerLabel
+                let ruleLabel = ruleStore.rule(for: log.ruleId)?.title
                     ?? shortID(log.ruleId.uuidString)
                 let ruleShortID = shortID(log.ruleId.uuidString)
 
