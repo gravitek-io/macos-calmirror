@@ -44,6 +44,7 @@ struct RuleEditorView: View {
     /// SPM executables lack a bundle identifier, which can prevent automatic
     /// TextField focus. Using `@FocusState` lets us assign focus explicitly.
     private enum Field: Hashable {
+        case title
         case windowDays
         case blockerLabel
     }
@@ -52,6 +53,9 @@ struct RuleEditorView: View {
     @FocusState private var focusedField: Field?
 
     // MARK: - Form State
+
+    /// Human-readable name identifying this rule.
+    @State private var ruleTitle: String = ""
 
     /// Identifier of the selected source calendar.
     @State private var sourceCalendarID: String = ""
@@ -105,6 +109,7 @@ struct RuleEditorView: View {
 
         // Pre-populate form state from existing rule when in edit mode.
         if let rule = existingRule {
+            _ruleTitle = State(initialValue: rule.title)
             _sourceCalendarID = State(initialValue: rule.sourceCalendarIdentifier)
             _targetCalendarID = State(initialValue: rule.targetCalendarIdentifier)
             _windowDays = State(initialValue: rule.windowDays)
@@ -120,8 +125,13 @@ struct RuleEditorView: View {
     }
 
     /// Navigation title reflecting the current editing mode.
-    private var title: String {
+    private var navigationTitle: String {
         isEditMode ? "Edit Rule" : "New Rule"
+    }
+
+    /// Whether the rule title is empty or whitespace-only.
+    private var isTitleEmpty: Bool {
+        ruleTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// Whether the source and target calendars are the same (self-mirroring).
@@ -138,7 +148,8 @@ struct RuleEditorView: View {
 
     /// Whether all form fields pass validation and the form can be saved.
     private var isFormValid: Bool {
-        !sourceCalendarID.isEmpty
+        !isTitleEmpty
+            && !sourceCalendarID.isEmpty
             && !targetCalendarID.isEmpty
             && !isSelfMirroring
             && !isLabelEmpty
@@ -164,7 +175,7 @@ struct RuleEditorView: View {
             validationSection
         }
         .formStyle(.grouped)
-        .navigationTitle(title)
+        .navigationTitle(navigationTitle)
         .frame(minWidth: 420, idealWidth: 480, minHeight: 320)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -186,10 +197,10 @@ struct RuleEditorView: View {
             await loadCalendars()
         }
         .onAppear {
-            // Programmatically assign focus to the blocker label field after
+            // Programmatically assign focus to the title field after
             // a short delay, giving the navigation transition time to settle.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                focusedField = .blockerLabel
+                focusedField = .title
             }
         }
     }
@@ -197,52 +208,72 @@ struct RuleEditorView: View {
     // MARK: - Sections
 
     /// Section for source and target calendar pickers.
+    ///
+    /// Pickers are only rendered after calendar data has loaded to avoid
+    /// SwiftUI warnings about selection tags that don't match any option
+    /// (the selection values are set before the async load completes).
     @ViewBuilder
     private var calendarSection: some View {
         Section("Calendars") {
-            // Source calendar picker: all calendars
-            Picker("Source Calendar", selection: $sourceCalendarID) {
-                Text("Select a calendar")
-                    .tag("")
+            if !accessGranted && accessError == nil {
+                // Calendar data is still loading; defer picker rendering.
+                ProgressView("Loading calendars…")
+            } else {
+                // Source calendar picker: all calendars
+                Picker("Source Calendar", selection: $sourceCalendarID) {
+                    Text("Select a calendar")
+                        .tag("")
 
-                ForEach(calendarGroups, id: \.account) { group in
-                    Section(group.account) {
-                        ForEach(group.calendars, id: \.calendar.calendarIdentifier) { entry in
-                            Text("\(entry.calendar.title) (\(group.account))")
-                                .tag(entry.calendar.calendarIdentifier)
+                    ForEach(calendarGroups, id: \.account) { group in
+                        Section(group.account) {
+                            ForEach(group.calendars, id: \.calendar.calendarIdentifier) { entry in
+                                Text("\(entry.calendar.title) (\(group.account))")
+                                    .tag(entry.calendar.calendarIdentifier)
+                            }
                         }
                     }
                 }
-            }
 
-            // Target calendar picker: only writable calendars
-            Picker("Target Calendar", selection: $targetCalendarID) {
-                Text("Select a calendar")
-                    .tag("")
+                // Target calendar picker: only writable calendars
+                Picker("Target Calendar", selection: $targetCalendarID) {
+                    Text("Select a calendar")
+                        .tag("")
 
-                ForEach(writableCalendarGroups, id: \.account) { group in
-                    Section(group.account) {
-                        ForEach(group.calendars, id: \.calendar.calendarIdentifier) { entry in
-                            Text("\(entry.calendar.title) (\(group.account))")
-                                .tag(entry.calendar.calendarIdentifier)
+                    ForEach(writableCalendarGroups, id: \.account) { group in
+                        Section(group.account) {
+                            ForEach(group.calendars, id: \.calendar.calendarIdentifier) { entry in
+                                Text("\(entry.calendar.title) (\(group.account))")
+                                    .tag(entry.calendar.calendarIdentifier)
+                            }
                         }
                     }
                 }
-            }
 
-            // Inline error when source and target are the same
-            if isSelfMirroring {
-                Text(MirrorRule.ValidationError.selfMirroring.localizedDescription)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                // Inline error when source and target are the same
+                if isSelfMirroring {
+                    Text(MirrorRule.ValidationError.selfMirroring.localizedDescription)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
         }
     }
 
-    /// Section for window days input and blocker label text field.
+    /// Section for rule title, window days input, and blocker label text field.
     @ViewBuilder
     private var configurationSection: some View {
         Section("Configuration") {
+            TextField("Rule Title", text: $ruleTitle)
+                .textFieldStyle(.roundedBorder)
+                .focused($focusedField, equals: .title)
+
+            // Inline error when title is empty
+            if isTitleEmpty {
+                Text(MirrorRule.ValidationError.emptyTitle.localizedDescription)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
             HStack {
                 Text("Window")
                 Spacer()
@@ -318,6 +349,7 @@ struct RuleEditorView: View {
         if isEditMode, let existing = existingRule {
             // Edit mode: update mutable fields on the existing rule.
             var updated = existing
+            updated.title = ruleTitle
             updated.windowDays = windowDays
             updated.blockerLabel = blockerLabel
             updated.updatedAt = Date()
@@ -344,6 +376,7 @@ struct RuleEditorView: View {
 
             // Build a new MirrorRule and add it to the store.
             let newRule = MirrorRule(
+                title: ruleTitle,
                 sourceCalendarIdentifier: sourceCalendarID,
                 targetCalendarIdentifier: targetCalendarID,
                 windowDays: windowDays,

@@ -316,7 +316,7 @@ struct LogsView: View {
     /// - Parameter ruleId: The UUID of the mirror rule to look up.
     /// - Returns: The rule's blocker label, or "Unknown Rule".
     private func ruleLabel(for ruleId: UUID) -> String {
-        rules.first(where: { $0.id == ruleId })?.blockerLabel ?? "Unknown Rule"
+        rules.first(where: { $0.id == ruleId })?.title ?? "Unknown Rule"
     }
 
     /// Formats a duration in seconds into a compact display string.
