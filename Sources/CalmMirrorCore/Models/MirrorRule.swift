@@ -62,9 +62,21 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
     /// Valid range: 1...120.
     public var windowDays: Int
 
-    /// Label text used as the title for every blocker event created by this rule.
-    /// Example: "[Client] Busy". No source event data is included.
+    /// Static label used as the blocker title when `usePlaceholder` is `true`.
+    /// Example: "[Client] Busy". When the placeholder is used, no source event
+    /// data is included in the blocker.
     public var blockerLabel: String
+
+    /// Controls how blocker events are titled.
+    ///
+    /// - `false` (default for new rules): the blocker title mirrors the source
+    ///   event name, prefixed with the rule title in brackets, e.g.
+    ///   "[Acme] Tax meeting". The source event **title** is copied into the
+    ///   blocker (and only the title — never location, notes, attendees, etc.).
+    /// - `true`: the blocker title is the static `blockerLabel`, copying no source
+    ///   event data. This is the default for rules persisted before this field
+    ///   existed, preserving their original privacy behavior.
+    public var usePlaceholder: Bool
 
     /// Whether this rule is enabled for automatic sync execution.
     /// Disabled rules are skipped during sync cycles but retain their configuration.
@@ -86,6 +98,7 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
         targetCalendarIdentifier: String,
         windowDays: Int,
         blockerLabel: String,
+        usePlaceholder: Bool,
         isEnabled: Bool,
         createdAt: Date,
         updatedAt: Date
@@ -96,6 +109,7 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
         self.targetCalendarIdentifier = targetCalendarIdentifier
         self.windowDays = windowDays
         self.blockerLabel = blockerLabel
+        self.usePlaceholder = usePlaceholder
         self.isEnabled = isEnabled
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -109,13 +123,16 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
     ///   - sourceCalendarIdentifier: The calendar to read events from.
     ///   - targetCalendarIdentifier: The dedicated CalMirror calendar for blockers.
     ///   - windowDays: Number of days forward to sync (1...120).
-    ///   - blockerLabel: Text label for created blocker events.
+    ///   - blockerLabel: Static label used when `usePlaceholder` is `true`.
+    ///   - usePlaceholder: When `true`, blockers use `blockerLabel`; when `false`
+    ///     (the default for new rules), blockers mirror the source event name.
     public init(
         title: String,
         sourceCalendarIdentifier: String,
         targetCalendarIdentifier: String,
         windowDays: Int,
-        blockerLabel: String
+        blockerLabel: String,
+        usePlaceholder: Bool = false
     ) {
         let now = Date()
         self.init(
@@ -125,10 +142,33 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
             targetCalendarIdentifier: targetCalendarIdentifier,
             windowDays: windowDays,
             blockerLabel: blockerLabel,
+            usePlaceholder: usePlaceholder,
             isEnabled: true,
             createdAt: now,
             updatedAt: now
         )
+    }
+
+    // MARK: - Blocker Title
+
+    /// Computes the title to use for a blocker event derived from a source event.
+    ///
+    /// - In placeholder mode (`usePlaceholder == true`), returns the static
+    ///   `blockerLabel`, copying no source data.
+    /// - In source-name mode (`usePlaceholder == false`), returns the rule title
+    ///   in brackets followed by the source event name, e.g. "[Acme] Tax meeting".
+    ///   When the source title is empty, nil, or whitespace-only, the suffix
+    ///   falls back to "(No title)".
+    ///
+    /// - Parameter sourceTitle: The source event's title (may be nil/empty).
+    /// - Returns: The blocker event title.
+    public func blockerTitle(forSourceTitle sourceTitle: String?) -> String {
+        if usePlaceholder {
+            return blockerLabel
+        }
+        let trimmed = (sourceTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let suffix = trimmed.isEmpty ? "(No title)" : trimmed
+        return "[\(title)] \(suffix)"
     }
 
     // MARK: - Codable (Backward Compatibility)
@@ -140,7 +180,7 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
     /// `title` defaults to `blockerLabel` so legacy rules remain usable.
     private enum CodingKeys: String, CodingKey {
         case id, title, sourceCalendarIdentifier, targetCalendarIdentifier
-        case windowDays, blockerLabel, isEnabled, createdAt, updatedAt
+        case windowDays, blockerLabel, usePlaceholder, isEnabled, createdAt, updatedAt
     }
 
     /// Decodes a `MirrorRule` from JSON, falling back to `blockerLabel` for
@@ -157,6 +197,10 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         // Fall back to blockerLabel when title is missing (pre-existing rules).
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? blockerLabel
+        // Default to placeholder mode when absent so rules persisted before this
+        // field existed keep their original static-label (privacy-preserving)
+        // behavior, rather than silently mirroring source event titles.
+        usePlaceholder = try container.decodeIfPresent(Bool.self, forKey: .usePlaceholder) ?? true
     }
 
     // MARK: - Validation
@@ -171,14 +215,18 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
     ///   - sourceCalendarIdentifier: The calendar to read events from.
     ///   - targetCalendarIdentifier: The dedicated CalMirror calendar for blockers.
     ///   - windowDays: Number of days forward to sync (must be 1...120).
-    ///   - blockerLabel: Text label for blocker events (must not be empty/whitespace).
+    ///   - blockerLabel: Static label for blocker events. Must not be empty/whitespace
+    ///     when `usePlaceholder` is `true`; ignored otherwise.
+    ///   - usePlaceholder: Whether blockers use the static label instead of the
+    ///     source event name. The label is only validated when this is `true`.
     /// - Returns: A `ValidationError` if the configuration is invalid, or `nil` if valid.
     public static func validate(
         title: String,
         sourceCalendarIdentifier: String,
         targetCalendarIdentifier: String,
         windowDays: Int,
-        blockerLabel: String
+        blockerLabel: String,
+        usePlaceholder: Bool
     ) -> ValidationError? {
         if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return .emptyTitle
@@ -189,7 +237,8 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
         if !(1...120).contains(windowDays) {
             return .windowOutOfRange
         }
-        if blockerLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        // The static label is only meaningful when the placeholder is in use.
+        if usePlaceholder && blockerLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return .emptyLabel
         }
         return nil

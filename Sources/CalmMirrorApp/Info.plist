@@ -14,10 +14,10 @@
 
     <!-- Versioning -->
     <key>CFBundleVersion</key>
-    <string>1.0.0</string>
+    <string>1.1.0</string>
 
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>1.1.0</string>
 
     <!-- Bundle type and executable -->
     <key>CFBundlePackageType</key>

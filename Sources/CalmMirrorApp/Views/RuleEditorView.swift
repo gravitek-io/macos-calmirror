@@ -66,8 +66,14 @@ struct RuleEditorView: View {
     /// Number of days forward from today defining the sync window (1...120).
     @State private var windowDays: Int = 7
 
-    /// Label text used as the title for every blocker event created by this rule.
-    @State private var blockerLabel: String = "Busy"
+    /// Static label used as the blocker title when `usePlaceholder` is on.
+    /// Empty by default for new rules; a suggestion is filled in when the user
+    /// enables the placeholder.
+    @State private var blockerLabel: String = ""
+
+    /// Whether blockers use the static `blockerLabel` instead of mirroring the
+    /// source event name. New rules default to mirroring the source name.
+    @State private var usePlaceholder: Bool = false
 
     // MARK: - Calendar Data
 
@@ -114,6 +120,7 @@ struct RuleEditorView: View {
             _targetCalendarID = State(initialValue: rule.targetCalendarIdentifier)
             _windowDays = State(initialValue: rule.windowDays)
             _blockerLabel = State(initialValue: rule.blockerLabel)
+            _usePlaceholder = State(initialValue: rule.usePlaceholder)
         }
     }
 
@@ -146,13 +153,29 @@ struct RuleEditorView: View {
         blockerLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Suggested default placeholder, prefixed with the rule title when present,
+    /// e.g. "[Acme] Busy". Used to pre-fill the field when the user opts into the
+    /// placeholder.
+    private var suggestedPlaceholder: String {
+        let trimmed = ruleTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Busy" : "[\(trimmed)] Busy"
+    }
+
+    /// Example of a source-name blocker title, shown to explain the default mode.
+    private var sourceNameExample: String {
+        let trimmed = ruleTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefix = trimmed.isEmpty ? "[Rule]" : "[\(trimmed)]"
+        return "\(prefix) <event name>"
+    }
+
     /// Whether all form fields pass validation and the form can be saved.
+    /// The label is only required when the placeholder is in use.
     private var isFormValid: Bool {
         !isTitleEmpty
             && !sourceCalendarID.isEmpty
             && !targetCalendarID.isEmpty
             && !isSelfMirroring
-            && !isLabelEmpty
+            && (!usePlaceholder || !isLabelEmpty)
             && (1...120).contains(windowDays)
     }
 
@@ -288,15 +311,29 @@ struct RuleEditorView: View {
                     .foregroundStyle(.secondary)
             }
 
-            TextField("Blocker Label", text: $blockerLabel)
-                .textFieldStyle(.roundedBorder)
-                .focused($focusedField, equals: .blockerLabel)
+            Toggle("Use a fixed placeholder", isOn: $usePlaceholder)
+                .onChange(of: usePlaceholder) { _, isOn in
+                    // Suggest a default placeholder the first time it's enabled.
+                    if isOn && isLabelEmpty {
+                        blockerLabel = suggestedPlaceholder
+                    }
+                }
 
-            // Inline error when label is empty
-            if isLabelEmpty {
-                Text(MirrorRule.ValidationError.emptyLabel.localizedDescription)
+            if usePlaceholder {
+                TextField("Blocker Label", text: $blockerLabel)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .blockerLabel)
+
+                // Inline error when label is empty in placeholder mode
+                if isLabelEmpty {
+                    Text(MirrorRule.ValidationError.emptyLabel.localizedDescription)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            } else {
+                Text("Blockers will be titled “\(sourceNameExample)”, using each event's name.")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -352,6 +389,7 @@ struct RuleEditorView: View {
             updated.title = ruleTitle
             updated.windowDays = windowDays
             updated.blockerLabel = blockerLabel
+            updated.usePlaceholder = usePlaceholder
             updated.updatedAt = Date()
 
             // Source and target are immutable (let properties), so they cannot
@@ -380,7 +418,8 @@ struct RuleEditorView: View {
                 sourceCalendarIdentifier: sourceCalendarID,
                 targetCalendarIdentifier: targetCalendarID,
                 windowDays: windowDays,
-                blockerLabel: blockerLabel
+                blockerLabel: blockerLabel,
+                usePlaceholder: usePlaceholder
             )
 
             do {

@@ -170,6 +170,8 @@ public final class CalendarService {
     /// - Availability set to `.busy`
     /// - Notes set to ``blockerNotesTag``
     ///
+    /// The only source data that may appear is the title, when the rule mirrors
+    /// the source event name (see `MirrorRule.blockerTitle(forSourceTitle:)`).
     /// All other fields are explicitly left `nil` or empty to avoid leaking
     /// source event data: location, structuredLocation, URL, alarms, and
     /// recurrenceRules are never set. Attendees and organizer are read-only
@@ -214,15 +216,18 @@ public final class CalendarService {
         return event
     }
 
-    /// Updates the time properties of an existing blocker event.
+    /// Updates the title and time properties of an existing blocker event.
     ///
-    /// Only `startDate`, `endDate`, and `isAllDay` are modified. All other
-    /// fields remain unchanged to preserve the event's identity and avoid
-    /// accidentally overwriting user edits to non-managed fields.
+    /// Only `title`, `startDate`, `endDate`, and `isAllDay` are modified. All
+    /// other fields remain unchanged to preserve the event's identity and avoid
+    /// accidentally overwriting user edits to non-managed fields. The title is
+    /// updated so that a renamed source event (in source-name mode) is reflected
+    /// on the existing blocker.
     ///
     /// - Parameters:
     ///   - event: The blocker event to update. Must have been previously created
     ///     by CalMirror.
+    ///   - title: The blocker title to apply.
     ///   - startDate: The new start time.
     ///   - endDate: The new end time.
     ///   - isAllDay: The new all-day flag.
@@ -231,11 +236,13 @@ public final class CalendarService {
     /// - Throws: An `EKError` if the save operation fails.
     public func updateBlockerEvent(
         _ event: EKEvent,
+        title: String,
         startDate: Date,
         endDate: Date,
         isAllDay: Bool,
         commit: Bool
     ) throws {
+        event.title = title
         event.startDate = startDate
         event.endDate = endDate
         event.isAllDay = isAllDay
