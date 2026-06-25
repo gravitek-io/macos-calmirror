@@ -136,7 +136,11 @@ public final class SyncEngine {
         // Step 5: Diff — classify each event and record
         // ------------------------------------------------------------------
 
-        let diffResult = computeDiff(sourceEvents: sourceEvents, existingRecords: existingRecords)
+        let diffResult = computeDiff(
+            sourceEvents: sourceEvents,
+            existingRecords: existingRecords,
+            rule: rule
+        )
 
         // ------------------------------------------------------------------
         // Step 6: Execute changes (unless dry run)
@@ -159,7 +163,7 @@ public final class SyncEngine {
                 do {
                     let blocker = try calendarService.createBlockerEvent(
                         in: targetCalendar,
-                        title: rule.blockerLabel,
+                        title: rule.blockerTitle(forSourceTitle: event.title),
                         startDate: event.startDate,
                         endDate: event.endDate,
                         isAllDay: event.isAllDay,
@@ -214,6 +218,7 @@ public final class SyncEngine {
 
                     try calendarService.updateBlockerEvent(
                         blockerEvent,
+                        title: rule.blockerTitle(forSourceTitle: event.title),
                         startDate: event.startDate,
                         endDate: event.endDate,
                         isAllDay: event.isAllDay,
@@ -418,7 +423,8 @@ public final class SyncEngine {
     /// - Returns: A `DiffResult` classifying each event and record.
     private func computeDiff(
         sourceEvents: [EKEvent],
-        existingRecords: [SyncRecord]
+        existingRecords: [SyncRecord],
+        rule: MirrorRule
     ) -> DiffResult {
         // Build a lookup by the composite record ID to handle recurring occurrences.
         // Record.id = "{sourceEventIdentifier}_{sourceStartDate.timeIntervalSince1970}"
@@ -435,7 +441,8 @@ public final class SyncEngine {
             let contentHash = ContentHasher.computeContentHash(
                 startDate: event.startDate,
                 endDate: event.endDate,
-                isAllDay: event.isAllDay
+                isAllDay: event.isAllDay,
+                blockerTitle: rule.blockerTitle(forSourceTitle: event.title)
             )
 
             // Build the same composite key that SyncRecord.id uses.

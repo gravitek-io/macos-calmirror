@@ -6,6 +6,24 @@ macOS application that mirrors calendar events between accounts by creating bloc
 
 CalMirror reads events from a **source calendar** and creates "blocker" events in a **target calendar** within a configurable time window. A background agent runs every 15 minutes to keep everything in sync. Changes (new, updated, cancelled events) are detected via content hashing.
 
+### Blocker titles
+
+Each rule decides how its blockers are titled:
+
+- **Mirror the source event name** (default): the blocker title is the rule
+  title in brackets followed by the source event name, e.g. `[CMA] Tax meeting`.
+  When a source event has no title, the blocker falls back to `[CMA] (No title)`.
+  If a source event is later renamed, the blocker is updated on the next sync.
+- **Fixed placeholder**: enable "Use a fixed placeholder" to title every blocker
+  with a static label instead (e.g. `[CMA] Busy`), revealing nothing about the
+  source event.
+
+**Privacy:** in mirror mode the source event **title** is copied into the
+blocker — and only the title. Location, notes, attendees, URL, alarms and
+recurrence are never copied in either mode. Choose the fixed placeholder if you
+do not want event names to appear in the target calendar. Rules created before
+this option existed keep using their fixed label.
+
 ## Requirements
 
 - macOS 26+
@@ -39,7 +57,7 @@ You can also install components separately:
 
 1. **Open CalMirror** from `/Applications` or Spotlight
 2. **Grant calendar access** when prompted
-3. **Create a rule**: pick a source calendar, a target calendar, set the sync window (days) and blocker label
+3. **Create a rule**: pick a source calendar, a target calendar, and set the sync window (days). By default blockers mirror the source event name; tick "Use a fixed placeholder" to set a static label instead
 4. The launchd agent syncs automatically every 15 minutes
 
 To trigger a manual sync:
@@ -68,7 +86,7 @@ CalMirror/
 │   │   ├── CalmMirrorApp.swift
 │   │   └── Views/               # RulesListView, RuleEditorView, LogsView
 │   └── calmirror/               # CLI (Swift Argument Parser)
-├── Tests/CalmMirrorCoreTests/   # 57 unit tests
+├── Tests/CalmMirrorCoreTests/   # 68 unit tests
 ├── Resources/                   # launchd plist template
 └── scripts/
     └── install.sh               # Build & install script

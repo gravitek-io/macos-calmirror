@@ -89,6 +89,33 @@ final class ContentHasherTests: XCTestCase {
         )
     }
 
+    /// A different blocker title must produce a different hash, so that a renamed
+    /// source event (which changes the derived blocker title) is detected as a
+    /// change and the blocker is updated.
+    func testDifferentBlockerTitleProducesDifferentHash() {
+        let hashA = ContentHasher.computeContentHash(
+            startDate: fixedStart, endDate: fixedEnd, isAllDay: false, blockerTitle: "[CMA] Old name"
+        )
+        let hashB = ContentHasher.computeContentHash(
+            startDate: fixedStart, endDate: fixedEnd, isAllDay: false, blockerTitle: "[CMA] New name"
+        )
+
+        XCTAssertNotEqual(hashA, hashB, "Changing the blocker title must change the hash")
+    }
+
+    /// Identical inputs including the blocker title must yield the same hash —
+    /// confirms placeholder-mode rules (constant title) trigger no needless updates.
+    func testIdenticalBlockerTitleProducesSameHash() {
+        let hashA = ContentHasher.computeContentHash(
+            startDate: fixedStart, endDate: fixedEnd, isAllDay: false, blockerTitle: "[CMA] Busy"
+        )
+        let hashB = ContentHasher.computeContentHash(
+            startDate: fixedStart, endDate: fixedEnd, isAllDay: false, blockerTitle: "[CMA] Busy"
+        )
+
+        XCTAssertEqual(hashA, hashB, "Identical inputs must produce identical hashes")
+    }
+
     // MARK: - Output Format
 
     /// A SHA-256 digest encoded as hex must be exactly 64 characters long

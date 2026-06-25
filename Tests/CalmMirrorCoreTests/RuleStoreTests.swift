@@ -46,6 +46,7 @@ final class RuleStoreTests: XCTestCase {
         target: String = "target-calendar",
         windowDays: Int = 14,
         label: String = "Busy",
+        usePlaceholder: Bool = true,
         isEnabled: Bool = true
     ) -> MirrorRule {
         let now = Date()
@@ -56,6 +57,7 @@ final class RuleStoreTests: XCTestCase {
             targetCalendarIdentifier: target,
             windowDays: windowDays,
             blockerLabel: label,
+            usePlaceholder: usePlaceholder,
             isEnabled: isEnabled,
             createdAt: now,
             updatedAt: now

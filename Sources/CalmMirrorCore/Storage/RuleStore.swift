@@ -91,7 +91,8 @@ public final class RuleStore: @unchecked Sendable {
             sourceCalendarIdentifier: rule.sourceCalendarIdentifier,
             targetCalendarIdentifier: rule.targetCalendarIdentifier,
             windowDays: rule.windowDays,
-            blockerLabel: rule.blockerLabel
+            blockerLabel: rule.blockerLabel,
+            usePlaceholder: rule.usePlaceholder
         ) {
             throw validationError
         }

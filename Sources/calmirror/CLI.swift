@@ -335,26 +335,41 @@ extension CalmMirror.Rules {
 
         /// Prints rules as a human-readable table with aligned columns.
         ///
-        /// Columns: ID (8-char), TITLE, SOURCE (8-char), TARGET (8-char), WINDOW, STATUS
+        /// Columns: ID (8-char), TITLE, SOURCE (8-char), TARGET (8-char),
+        /// WINDOW, MODE, STATUS. MODE is "fixed" when the rule uses a static
+        /// placeholder label, or "source" when blockers mirror the event name.
         private func printRulesHuman(_ rules: [MirrorRule]) {
+            // Right-pads a column to a fixed width using native Swift string
+            // handling. Avoids C-string `%s` formatting, which crashes when a
+            // Swift String is passed where a `char *` is expected.
+            func column(_ value: String, width: Int) -> String {
+                value.count >= width
+                    ? value
+                    : value + String(repeating: " ", count: width - value.count)
+            }
+
+            func formatRow(_ cells: [(String, Int)]) -> String {
+                cells.map { column($0.0, width: $0.1) }
+                    .joined(separator: " ")
+                    .trimmingCharacters(in: .whitespaces)
+            }
+
             // Header
-            let header = String(
-                format: "%-10s %-24s %-10s %-10s %-8s %s",
-                "ID", "TITLE", "SOURCE", "TARGET", "WINDOW", "STATUS"
-            )
-            print(header)
+            print(formatRow([
+                ("ID", 10), ("TITLE", 24), ("SOURCE", 10),
+                ("TARGET", 10), ("WINDOW", 8), ("MODE", 8), ("STATUS", 0)
+            ]))
 
             for rule in rules {
-                let line = String(
-                    format: "%-10s %-24s %-10s %-10s %-8s %s",
-                    (shortID(rule.id.uuidString) as NSString).utf8String!,
-                    (truncateLabel(rule.title, maxLength: 24) as NSString).utf8String!,
-                    (shortID(rule.sourceCalendarIdentifier) as NSString).utf8String!,
-                    (shortID(rule.targetCalendarIdentifier) as NSString).utf8String!,
-                    ("\(rule.windowDays)d" as NSString).utf8String!,
-                    rule.isEnabled ? "enabled" : "disabled"
-                )
-                print(line)
+                print(formatRow([
+                    (shortID(rule.id.uuidString), 10),
+                    (truncateLabel(rule.title, maxLength: 24), 24),
+                    (shortID(rule.sourceCalendarIdentifier), 10),
+                    (shortID(rule.targetCalendarIdentifier), 10),
+                    ("\(rule.windowDays)d", 8),
+                    (rule.usePlaceholder ? "fixed" : "source", 8),
+                    (rule.isEnabled ? "enabled" : "disabled", 0)
+                ]))
             }
         }
 
@@ -424,8 +439,11 @@ extension CalmMirror.Rules {
         @Option(name: .long, help: "Number of days in the sliding time window (1-120)")
         var window: Int
 
-        @Option(name: .long, help: "Text label for blocker events")
-        var label: String
+        @Flag(name: .long, help: "Use a fixed placeholder label instead of mirroring the source event name")
+        var usePlaceholder: Bool = false
+
+        @Option(name: .long, help: "Fixed label for blocker events (required with --use-placeholder; ignored otherwise)")
+        var label: String = ""
 
         func run() throws {
             requireCalendarAccess()
@@ -466,9 +484,9 @@ extension CalmMirror.Rules {
                 Darwin.exit(3)
             }
 
-            // Validate label is not empty.
-            if label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                writeToStderr("error: label must not be empty.")
+            // Validate label is not empty when the placeholder is in use.
+            if usePlaceholder && label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                writeToStderr("error: --label must not be empty when --use-placeholder is set.")
                 Darwin.exit(3)
             }
 
@@ -478,7 +496,8 @@ extension CalmMirror.Rules {
                 sourceCalendarIdentifier: source,
                 targetCalendarIdentifier: target,
                 windowDays: window,
-                blockerLabel: label
+                blockerLabel: label,
+                usePlaceholder: usePlaceholder
             )
 
             let store = RuleStore()
@@ -498,7 +517,12 @@ extension CalmMirror.Rules {
             print("  Source: \(sourceCal.title) (\(sourceAccount))")
             print("  Target: \(targetCal.title) (\(targetAccount))")
             print("  Window: \(window) days")
-            print("  Label:  \(label)")
+            if usePlaceholder {
+                print("  Title mode: fixed placeholder")
+                print("  Label:  \(label)")
+            } else {
+                print("  Title mode: mirror source event name, e.g. \"[\(title)] <event name>\"")
+            }
         }
     }
 }
