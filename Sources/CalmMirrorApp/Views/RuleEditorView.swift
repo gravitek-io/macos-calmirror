@@ -5,7 +5,7 @@
 // Presents calendar pickers, a window-days input, and a blocker label
 // text field. Validates input inline and persists changes through RuleStore.
 //
-// Requirements: macOS 14+ (Sonoma), Swift 5.10+
+// Requirements: macOS 26+, Swift 6.2+
 
 import CalmMirrorCore
 import EventKit
