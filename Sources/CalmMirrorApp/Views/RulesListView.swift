@@ -33,6 +33,14 @@ struct RulesListView: View {
     /// The rule currently being edited, or `nil` when adding a new rule.
     @State private var ruleBeingEdited: MirrorRule?
 
+    /// Shared coordinator used to trigger syncs and read per-rule outcomes.
+    @Environment(SyncCoordinator.self) private var syncCoordinator
+
+    /// Whether at least one rule is enabled, i.e. a sync would do something.
+    private var hasEnabledRule: Bool {
+        rules.contains(where: \.isEnabled)
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -48,16 +56,29 @@ struct RulesListView: View {
             .navigationTitle("Rules")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
+                    // Tooltips are attached to the labels: on macOS 26 a
+                    // `.help` placed on the toolbar button itself is not shown.
+                    Button {
+                        syncCoordinator.requestSync()
+                    } label: {
+                        Label("Sync Now", systemImage: "arrow.triangle.2.circlepath")
+                            .help(syncNowHelp)
+                    }
+                    .disabled(syncCoordinator.isSyncing || !hasEnabledRule)
+                }
+
+                ToolbarItem(placement: .primaryAction) {
                     Button {
                         presentEditor(for: nil)
                     } label: {
                         Label("Add Rule", systemImage: "plus")
+                            .help("Add a new mirror rule")
                     }
-                    .help("Add a new mirror rule")
                 }
             }
             .onAppear {
                 refreshRules()
+                syncCoordinator.refresh()
             }
             .onChange(of: isEditorPresented) { _, isPresented in
                 // Refresh the list when returning from the editor, regardless of
@@ -69,7 +90,10 @@ struct RulesListView: View {
             .navigationDestination(isPresented: $isEditorPresented) {
                 RuleEditorView(
                     ruleStore: ruleStore,
-                    existingRule: ruleBeingEdited
+                    existingRule: ruleBeingEdited,
+                    // A created or edited rule is synced right away so the
+                    // blockers appear without waiting for the schedule.
+                    onSave: { syncCoordinator.requestSync() }
                 )
             }
         }
@@ -134,6 +158,8 @@ struct RulesListView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+
+                lastSyncCaption(for: rule)
             }
 
             Spacer()
@@ -179,7 +205,58 @@ struct RulesListView: View {
         .padding(.vertical, 4)
     }
 
+    /// One-line summary of the rule's most recent sync, from the log store.
+    ///
+    /// Shows when it ran and what it changed, or the first error in red, so
+    /// a user who "sees no sync" can tell at a glance whether the agent ever
+    /// processed the rule. Rules that never synced say so explicitly.
+    @ViewBuilder
+    private func lastSyncCaption(for rule: MirrorRule) -> some View {
+        if let log = syncCoordinator.latestLogByRule[rule.id] {
+            if let error = log.errors.first {
+                HStack(spacing: 4) {
+                    Text("Last sync failed")
+                    RelativeTimeText(date: log.timestamp)
+                    Text("· \(error.message)")
+                }
+                .font(.caption)
+                .foregroundStyle(.red)
+                .lineLimit(1)
+                .help(error.message)
+            } else {
+                HStack(spacing: 4) {
+                    Text("Last synced")
+                    RelativeTimeText(date: log.timestamp)
+                    Text("· \(changeSummary(for: log))")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+        } else {
+            Text("Not synced yet")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
     // MARK: - Helpers
+
+    /// Tooltip of the "Sync Now" button, explaining why it is disabled when it is.
+    private var syncNowHelp: String {
+        if syncCoordinator.isSyncing {
+            return "A sync is in progress"
+        }
+        if !hasEnabledRule {
+            return "Enable a rule to sync"
+        }
+        return "Run the sync agent now instead of waiting for the schedule"
+    }
+
+    /// Builds a compact "+N added, ~N updated, -N removed" summary for a log.
+    private func changeSummary(for log: SyncLog) -> String {
+        "+\(log.addedCount) added, ~\(log.updatedCount) updated, -\(log.removedCount) removed"
+    }
 
     /// Returns the first 8 characters of a calendar identifier for compact display.
     ///
@@ -275,6 +352,12 @@ struct RulesListView: View {
             // Log-worthy but non-fatal; the refresh below will reconcile state.
         }
         refreshRules()
+
+        // Re-enabling a rule is like creating it: sync right away so its
+        // blockers come back without waiting for the schedule.
+        if enabled {
+            syncCoordinator.requestSync()
+        }
     }
 
     /// Removes a rule and its associated blocker events, then refreshes the list.

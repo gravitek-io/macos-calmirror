@@ -70,7 +70,10 @@ What this means in practice:
 
 ### The sync cycle
 
-A launchd agent runs `calmirror sync` every 15 minutes. For each rule it:
+A launchd agent runs `calmirror sync` every 15 minutes, and the app asks
+launchd to run it immediately when you press **Sync Now** or save a rule. In
+every case the agent is the only process writing to the calendars. For each
+rule it:
 
 1. reads the source events inside the rule's sliding window (for example the
    next 30 days);
@@ -164,11 +167,17 @@ Components can also be installed separately:
    short title (it prefixes every blocker) and set the sync window in days.
    Tick "Use a fixed placeholder" if you want a static label instead of the
    event names.
-4. The launchd agent takes over and syncs every 15 minutes. Blockers appear in
-   the target calendar on the Mac immediately, and on the provider side after
-   the Calendar app's next sync.
+4. CalMirror syncs the rule right away, then the launchd agent takes over and
+   syncs every 15 minutes. Blockers appear in the target calendar on the Mac
+   immediately, and on the provider side after the Calendar app's next sync.
 
-To run a sync right away, or to preview what a sync would do:
+The Rules tab also has a **Sync Now** button (circular arrows in the toolbar)
+to run the agent on demand, for example after changing events in the source
+calendar. Each rule shows when it last synced and what changed, and the
+window footer shows the overall sync status. A rule is synced automatically
+when it is created, edited or re-enabled.
+
+From the terminal, to run a sync right away or to preview what a sync would do:
 
 ```bash
 calmirror sync

@@ -255,6 +255,33 @@ public final class LaunchdManager {
         )
     }
 
+    // MARK: - Kickstart
+
+    /// Asks launchd to run the sync agent immediately, outside its schedule.
+    ///
+    /// Runs `launchctl kickstart gui/<uid>/com.gravitek.calmirror.sync`. This
+    /// is how the app offers a "Sync Now" action without embedding its own
+    /// copy of the sync run: the agent stays the single process that writes
+    /// to the calendars, and launchd guarantees that only one instance of the
+    /// job runs at a time (a kickstart issued while the job is already
+    /// running is ignored, the running instance simply completes).
+    ///
+    /// The call returns as soon as launchd has accepted the request; it does
+    /// not wait for the sync to finish. Callers observe completion through
+    /// ``status()`` and the sync logs.
+    ///
+    /// - Throws: ``LaunchdManagerError/notInstalled`` if the agent plist is
+    ///   missing, or ``LaunchdManagerError/launchctlFailed(_:)`` if launchd
+    ///   rejects the request (for example when the agent is not loaded).
+    public func kickstart() throws {
+        guard isInstalled() else {
+            throw LaunchdManagerError.notInstalled
+        }
+
+        let serviceTarget = "gui/\(currentUID())/\(Self.serviceLabel)"
+        try runLaunchctl(["kickstart", serviceTarget])
+    }
+
     // MARK: - Private Helpers
 
     /// Returns the current user's numeric UID as a string.
@@ -416,12 +443,23 @@ public final class LaunchdManager {
     /// - Throws: ``LaunchdManagerError/launchctlFailed(_:)`` if the
     ///   bootstrap command exits with a non-zero status.
     private func bootstrapAgent(plistPath: String) throws {
-        let uid = currentUID()
-        let domainTarget = "gui/\(uid)"
+        let domainTarget = "gui/\(currentUID())"
+        try runLaunchctl(["bootstrap", domainTarget, plistPath])
+    }
 
+    /// Runs `/bin/launchctl` with the given arguments and waits for it to exit.
+    ///
+    /// Shared by the commands that must succeed (`bootstrap`, `kickstart`).
+    /// Standard output is discarded; standard error is captured and folded
+    /// into the thrown error so the caller can surface launchd's own message.
+    ///
+    /// - Parameter arguments: The launchctl subcommand and its operands.
+    /// - Throws: ``LaunchdManagerError/launchctlFailed(_:)`` if launchctl
+    ///   cannot be started or exits with a non-zero status.
+    private func runLaunchctl(_ arguments: [String]) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        process.arguments = ["bootstrap", domainTarget, plistPath]
+        process.arguments = arguments
 
         let errorPipe = Pipe()
         process.standardOutput = FileHandle.nullDevice
@@ -442,9 +480,10 @@ public final class LaunchdManager {
             let errorMessage = String(data: errorData, encoding: .utf8)?.trimmingCharacters(
                 in: .whitespacesAndNewlines
             ) ?? "Unknown error"
+            let command = arguments.first ?? "launchctl"
 
             throw LaunchdManagerError.launchctlFailed(
-                "launchctl bootstrap exited with status \(process.terminationStatus): \(errorMessage)"
+                "launchctl \(command) exited with status \(process.terminationStatus): \(errorMessage)"
             )
         }
     }

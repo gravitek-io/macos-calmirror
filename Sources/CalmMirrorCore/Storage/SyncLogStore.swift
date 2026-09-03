@@ -115,6 +115,42 @@ public final class SyncLogStore {
         return Array(allLogs.suffix(count))
     }
 
+    /// Returns the sync logs recorded at or after the given date.
+    ///
+    /// Used by the app to collect the results of a sync it triggered: it
+    /// remembers the trigger time and reads back whatever the agent appended
+    /// afterwards. A log's `timestamp` is the moment its rule sync started,
+    /// so a run launched after `date` always qualifies.
+    ///
+    /// Timestamps are persisted in ISO 8601 with second precision, so the
+    /// bound is truncated to the second before comparing. Otherwise a run
+    /// that started in the same second as the trigger would be missed.
+    ///
+    /// - Parameter date: The inclusive lower bound on `timestamp`.
+    /// - Returns: Matching entries, ordered as stored on disk.
+    public func loadLogs(since date: Date) -> [SyncLog] {
+        let bound = Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down))
+        return loadLogs().filter { $0.timestamp >= bound }
+    }
+
+    /// Returns the most recent sync log for every rule that has one.
+    ///
+    /// Drives the per-rule status shown in the app ("Last synced 2 min ago").
+    /// Entries are compared by `timestamp` rather than by file position so
+    /// the result stays correct even if the file is not chronological.
+    ///
+    /// - Returns: A dictionary keyed by rule identifier.
+    public func latestLogByRule() -> [UUID: SyncLog] {
+        var latest: [UUID: SyncLog] = [:]
+        for log in loadLogs() {
+            if let current = latest[log.ruleId], current.timestamp >= log.timestamp {
+                continue
+            }
+            latest[log.ruleId] = log
+        }
+        return latest
+    }
+
     // MARK: - Write Operations
 
     /// Appends a new sync log entry to the log file.
