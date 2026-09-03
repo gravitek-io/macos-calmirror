@@ -3,6 +3,9 @@
 .swiftpm/
 Package.resolved
 
+# Release artifacts
+dist/
+
 # Xcode
 DerivedData/
 *.xcodeproj/
@@ -20,3 +23,11 @@ xcuserdata/
 
 # Environment
 .env*
+
+# Local AI-assisted workflow files (kept out of the public repository)
+CLAUDE.md
+PROMPT.md
+.claude/
+.specify/
+specs/
+docs/superpowers/
