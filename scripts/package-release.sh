@@ -14,7 +14,8 @@
 #   ./scripts/package-release.sh 1.1.0       # explicit version
 #
 # The script does NOT create the GitHub release; it only builds the archive.
-# See docs/RELEASING.md for the full release procedure.
+# The Release workflow (.github/workflows/release.yml) runs it on every vX.Y.Z
+# tag and attaches the archive to a draft release. See docs/RELEASING.md.
 
 set -euo pipefail
 
@@ -88,6 +89,5 @@ echo "==> Done: ${ARCHIVE}"
 echo "    Contents:"
 tar tzf "$ARCHIVE" | sed 's/^/      /'
 echo ""
-echo "    Next: create the GitHub release (see docs/RELEASING.md):"
-echo "      gh release create v${VERSION} --title \"${APP_NAME} ${VERSION}\" \\"
-echo "        --notes-file <notes.md> \"${ARCHIVE}\""
+echo "    Pushing tag v${VERSION} on main lets the Release workflow publish this"
+echo "    archive as a draft release (see docs/RELEASING.md)."
