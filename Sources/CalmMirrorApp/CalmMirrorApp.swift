@@ -60,17 +60,48 @@ struct CalmMirrorApp: App {
 /// modifier to fire reliably on first window presentation.
 private struct ContentView: View {
     var body: some View {
-        TabView {
-            RulesListView()
-                .tabItem {
-                    Label("Rules", systemImage: "list.bullet")
-                }
+        VStack(spacing: 0) {
+            TabView {
+                RulesListView()
+                    .tabItem {
+                        Label("Rules", systemImage: "list.bullet")
+                    }
 
-            LogsView()
-                .tabItem {
-                    Label("Logs", systemImage: "doc.text")
-                }
+                LogsView()
+                    .tabItem {
+                        Label("Logs", systemImage: "doc.text")
+                    }
+            }
+
+            Divider()
+            WindowFooter()
         }
         .frame(minWidth: 550, minHeight: 400)
+    }
+}
+
+/// Discreet footer showing the application name and version.
+///
+/// Lets users report the exact version they run (bug reports, support)
+/// without opening the About panel. The version comes from the bundle's
+/// `CFBundleShortVersionString`; when the binary runs outside a bundle
+/// (`swift run`), it falls back to the core library version so the footer
+/// never shows an empty value.
+private struct WindowFooter: View {
+    private static let versionString: String = {
+        let bundleVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        return bundleVersion ?? CalmMirrorCore.version
+    }()
+
+    var body: some View {
+        HStack {
+            Spacer()
+            Text("CalMirror \(Self.versionString)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.bar)
     }
 }
