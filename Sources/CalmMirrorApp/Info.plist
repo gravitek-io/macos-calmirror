@@ -26,6 +26,10 @@
     <key>CFBundleExecutable</key>
     <string>CalmMirrorApp</string>
 
+    <!-- App icon: Contents/Resources/AppIcon.icns, generated from Resources/AppIcon.svg -->
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+
     <!-- Standard windowed app: visible in Dock -->
     <key>LSUIElement</key>
     <false/>
