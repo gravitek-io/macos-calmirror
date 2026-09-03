@@ -4,6 +4,6 @@ import XCTest
 /// Placeholder test to validate the test target builds and links correctly.
 final class CalmMirrorCoreTests: XCTestCase {
     func testCoreLibraryVersion() {
-        XCTAssertEqual(CalmMirrorCore.version, "1.1.0")
+        XCTAssertEqual(CalmMirrorCore.version, "1.2.0")
     }
 }

@@ -136,7 +136,7 @@ extension CalmMirror {
         )
 
         func run() throws {
-            print("calmirror 1.1.0")
+            print("calmirror 1.2.0")
         }
     }
 }
