@@ -9,5 +9,5 @@
 /// - Sync diff algorithm (``SyncEngine``)
 public enum CalmMirrorCore {
     /// The current version of the CalmMirrorCore library.
-    public static let version = "1.1.0"
+    public static let version = "1.2.0"
 }
