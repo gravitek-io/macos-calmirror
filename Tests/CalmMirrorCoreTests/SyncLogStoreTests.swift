@@ -236,4 +236,59 @@ final class SyncLogStoreTests: XCTestCase {
             "The log exactly at the retention boundary should be kept"
         )
     }
+    // MARK: - Logs Since a Date
+
+    /// `loadLogs(since:)` returns only entries whose timestamp is at or after
+    /// the given date, in stored order. Used by the app to find the results
+    /// of a sync it triggered.
+    func testLoadLogsSinceReturnsOnlyNewerEntries() throws {
+        let trigger = Date()
+        let before = makeSyncLog(timestamp: trigger.addingTimeInterval(-60))
+        let atTrigger = makeSyncLog(timestamp: trigger)
+        let after = makeSyncLog(timestamp: trigger.addingTimeInterval(5))
+
+        try store.appendLog(before)
+        try store.appendLog(atTrigger)
+        try store.appendLog(after)
+
+        let recent = store.loadLogs(since: trigger)
+
+        XCTAssertEqual(recent.map(\.id), [atTrigger.id, after.id],
+                       "Only logs at or after the trigger date should be returned, in order")
+    }
+
+    /// `loadLogs(since:)` on an empty store returns an empty array.
+    func testLoadLogsSinceEmptyStore() {
+        XCTAssertTrue(store.loadLogs(since: Date()).isEmpty)
+    }
+
+    // MARK: - Latest Log Per Rule
+
+    /// `latestLogByRule()` keeps the most recent entry for every rule, even
+    /// when the file is not in chronological order.
+    func testLatestLogByRuleKeepsMostRecentEntry() throws {
+        let ruleA = UUID()
+        let ruleB = UUID()
+        let now = Date()
+
+        let oldA = makeSyncLog(ruleId: ruleA, timestamp: now.addingTimeInterval(-300))
+        let newA = makeSyncLog(ruleId: ruleA, timestamp: now)
+        let onlyB = makeSyncLog(ruleId: ruleB, timestamp: now.addingTimeInterval(-100))
+
+        // Append the newer entry first to prove ordering does not matter.
+        try store.appendLog(newA)
+        try store.appendLog(oldA)
+        try store.appendLog(onlyB)
+
+        let latest = store.latestLogByRule()
+
+        XCTAssertEqual(latest.count, 2, "One entry per rule is expected")
+        XCTAssertEqual(latest[ruleA]?.id, newA.id, "Rule A should map to its most recent log")
+        XCTAssertEqual(latest[ruleB]?.id, onlyB.id, "Rule B should map to its only log")
+    }
+
+    /// `latestLogByRule()` on an empty store returns an empty dictionary.
+    func testLatestLogByRuleEmptyStore() {
+        XCTAssertTrue(store.latestLogByRule().isEmpty)
+    }
 }

@@ -59,6 +59,11 @@ struct CalmMirrorApp: App {
 /// Separated from the `App` struct to allow the `.onAppear` activation
 /// modifier to fire reliably on first window presentation.
 private struct ContentView: View {
+
+    /// Shared coordinator for on-demand syncs, injected into the environment
+    /// so the rules tab, the footer and the editor observe the same state.
+    @State private var syncCoordinator = SyncCoordinator()
+
     var body: some View {
         VStack(spacing: 0) {
             TabView {
@@ -77,31 +82,73 @@ private struct ContentView: View {
             WindowFooter()
         }
         .frame(minWidth: 550, minHeight: 400)
+        .environment(syncCoordinator)
+        .onAppear {
+            syncCoordinator.refresh()
+        }
     }
 }
 
-/// Discreet footer showing the application name and version.
+/// Discreet footer showing the application name and version on the left and
+/// the sync status on the right.
 ///
-/// Lets users report the exact version they run (bug reports, support)
-/// without opening the About panel. The version comes from the bundle's
-/// `CFBundleShortVersionString`; when the binary runs outside a bundle
-/// (`swift run`), it falls back to the core library version so the footer
-/// never shows an empty value.
+/// The version lets users report the exact build they run without opening
+/// the About panel. It comes from the bundle's `CFBundleShortVersionString`;
+/// when the binary runs outside a bundle (`swift run`), it falls back to the
+/// core library version so the footer never shows an empty value.
+///
+/// The sync status answers "is anything happening?" from any tab: a spinner
+/// while a triggered run is in progress, the last failure, or how long ago
+/// the last sync ran (whether triggered by the app or by the schedule).
 private struct WindowFooter: View {
     private static let versionString: String = {
         let bundleVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
         return bundleVersion ?? CalmMirrorCore.version
     }()
 
+    @Environment(SyncCoordinator.self) private var syncCoordinator
+
     var body: some View {
         HStack {
-            Spacer()
             Text("CalMirror \(Self.versionString)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            Spacer()
+
+            syncStatus
+                .font(.caption)
+                .lineLimit(1)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(.bar)
+    }
+
+    /// The right-hand status: syncing, failed, last sync time or none yet.
+    @ViewBuilder
+    private var syncStatus: some View {
+        if syncCoordinator.isSyncing {
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Syncing…")
+                    .foregroundStyle(.secondary)
+            }
+        } else if let error = syncCoordinator.lastError {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .truncationMode(.tail)
+                .help(error)
+        } else if let lastSync = syncCoordinator.lastSyncDate {
+            HStack(spacing: 4) {
+                Text("Last sync:")
+                RelativeTimeText(date: lastSync)
+            }
+            .foregroundStyle(.secondary)
+        } else {
+            Text("No sync yet")
+                .foregroundStyle(.secondary)
+        }
     }
 }
