@@ -69,6 +69,7 @@ APP="${STAGE}/${APP_NAME}.app"
 mkdir -p "${APP}/Contents/MacOS" "${APP}/Contents/Resources"
 cp "${BUILD_DIR}/CalmMirrorApp" "${APP}/Contents/MacOS/CalmMirrorApp"
 cp "${PROJECT_DIR}/Sources/CalmMirrorApp/Info.plist" "${APP}/Contents/Info.plist"
+cp "${PROJECT_DIR}/Resources/AppIcon.icns" "${APP}/Contents/Resources/AppIcon.icns"
 codesign --force --sign - "$APP"
 
 # CLI binary

@@ -63,6 +63,9 @@ if $INSTALL_APP; then
     # Copy Info.plist
     cp "${PROJECT_DIR}/Sources/CalmMirrorApp/Info.plist" "${APP_DEST}/Contents/Info.plist"
 
+    # Copy the app icon (referenced by CFBundleIconFile in Info.plist)
+    cp "${PROJECT_DIR}/Resources/AppIcon.icns" "${APP_DEST}/Contents/Resources/AppIcon.icns"
+
     # Ad-hoc code sign so macOS accepts the bundle
     codesign --force --sign - "${APP_DEST}"
 

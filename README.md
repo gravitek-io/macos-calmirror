@@ -208,7 +208,7 @@ macos-calmirror/
 │   ├── CalmMirrorApp/           # SwiftUI windowed app
 │   └── calmirror/               # CLI (Swift Argument Parser)
 ├── Tests/CalmMirrorCoreTests/   # Unit tests for the core library
-├── Resources/                   # launchd plist template
+├── Resources/                   # launchd plist template, app icon (SVG source + generated .icns)
 ├── scripts/                     # Install and release packaging scripts
 ├── docs/                        # Maintainer documentation
 └── .github/                     # CI workflow, issue and PR templates
@@ -252,6 +252,7 @@ swift build                     # build every target
 swift test                      # run the unit tests
 swift run calmirror calendars   # run the CLI from source
 open Package.swift              # open in Xcode
+./scripts/generate-icon.sh      # regenerate Resources/AppIcon.icns after editing the SVG
 ```
 
 The [dependencies](Package.swift) are limited to Apple frameworks (EventKit,
