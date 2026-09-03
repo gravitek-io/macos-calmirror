@@ -24,7 +24,7 @@ calmirror-X.Y.Z/
   install.sh      # prebuilt installer (from scripts/release-install.sh)
 ```
 
-**Target platform:** macOS 14+ (Sonoma), Apple Silicon (arm64). Build on an
+**Target platform:** macOS 26+, Apple Silicon (arm64). Build on an
 Apple Silicon Mac.
 
 ## 1. Bump the version
@@ -38,7 +38,6 @@ one produces an inconsistent release.
 | `Sources/calmirror/CLI.swift` | `print("calmirror X.Y.Z")` in the `Version` command |
 | `Sources/CalmMirrorCore/CalmMirrorCore.swift` | `public static let version = "X.Y.Z"` |
 | `Tests/CalmMirrorCoreTests/CalmMirrorCoreTests.swift` | `testCoreLibraryVersion` asserts the version — keep it in sync |
-| `homebrew-tap/Formula/calmirror.rb` | `tag:` and the `assert_match` version (if the tap is published) |
 
 After bumping, `swift test` must stay green (`testCoreLibraryVersion` guards the
 library version).
@@ -49,12 +48,24 @@ features → minor, breaking changes → major.
 > The packaging script guards against a mismatched **CLI** version, but it
 > cannot check the others — update them all.
 
-## 2. Commit and tag
+## 2. Merge the bump and tag `main`
+
+`main` only changes through pull requests, so the version bump lands like any
+other change:
 
 ```bash
+git checkout -b chore/release-X.Y.Z
 git commit -am "chore(release): bump version to X.Y.Z"
+git push -u origin chore/release-X.Y.Z
+gh pr create --title "chore(release): bump version to X.Y.Z" --fill
+```
+
+Once the PR is merged, tag the resulting commit on `main`:
+
+```bash
+git checkout main && git pull
 git tag -a vX.Y.Z -m "vX.Y.Z — <one-line summary>"
-git push && git push --tags   # push only after your approval
+git push origin vX.Y.Z
 ```
 
 The tag must point at the commit you intend to ship; `package-release.sh`
