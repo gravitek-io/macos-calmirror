@@ -3,6 +3,9 @@
 .swiftpm/
 Package.resolved
 
+# Release artifacts
+dist/
+
 # Xcode
 DerivedData/
 *.xcodeproj/

@@ -115,6 +115,17 @@ swift run calmirror sync
 open Package.swift
 ```
 
+## Releasing
+
+To cut a new version, build the distributable archive with:
+
+```bash
+./scripts/package-release.sh X.Y.Z
+```
+
+See [docs/RELEASING.md](docs/RELEASING.md) for the full procedure (version
+bump, tagging, and publishing the GitHub release).
+
 ## Data Storage
 
 | Data | Location |
