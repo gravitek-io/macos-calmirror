@@ -60,22 +60,39 @@ struct CalmMirrorApp: App {
 /// modifier to fire reliably on first window presentation.
 private struct ContentView: View {
 
+    /// The tabs of the main window, in display order.
+    private enum Tab: Hashable {
+        case rules
+        case logs
+    }
+
     /// Shared coordinator for on-demand syncs, injected into the environment
     /// so the rules tab, the footer and the editor observe the same state.
     @State private var syncCoordinator = SyncCoordinator()
 
+    /// The selected tab, owned explicitly rather than left to `TabView`.
+    ///
+    /// Without a selection binding, the macOS `TabView` reverts to the
+    /// previous tab when the newly shown tab mutates its state while
+    /// appearing, which ``LogsView`` does when it loads the logs. The first
+    /// click on "Logs" then appears to do nothing; holding the selection
+    /// here makes it the single source of truth and keeps the switch.
+    @State private var selectedTab: Tab = .rules
+
     var body: some View {
         VStack(spacing: 0) {
-            TabView {
+            TabView(selection: $selectedTab) {
                 RulesListView()
                     .tabItem {
                         Label("Rules", systemImage: "list.bullet")
                     }
+                    .tag(Tab.rules)
 
                 LogsView()
                     .tabItem {
                         Label("Logs", systemImage: "doc.text")
                     }
+                    .tag(Tab.logs)
             }
 
             Divider()
