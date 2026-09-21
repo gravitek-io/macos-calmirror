@@ -10,7 +10,10 @@ import Foundation
 /// ## Algorithm Overview
 /// 1. Validate source and target calendars exist and are writable.
 /// 2. Fetch source events within the configured time window.
-/// 3. Diff fetched events against persisted `SyncRecord` mappings.
+/// 3. Diff fetched events against persisted `SyncRecord` mappings, mirroring
+///    source events with an identical title and time only once.
+/// 3b. Adopt matching CalMirror blockers already present in the target
+///    calendar instead of creating duplicates.
 /// 4. Execute create/update/delete operations for blocker events.
 /// 5. Persist updated sync records and append a `SyncLog` entry.
 ///
@@ -143,22 +146,61 @@ public final class SyncEngine {
         )
 
         // ------------------------------------------------------------------
+        // Step 5b: Reuse blockers that already exist in the target calendar
+        // ------------------------------------------------------------------
+
+        // A new event whose blocker (same title and time) is already present
+        // in the target calendar adopts it instead of creating a duplicate.
+        var adoptableBlockers = diffResult.newEvents.isEmpty ? [:] : findAdoptableBlockers(
+            in: targetCalendar,
+            from: windowStart,
+            to: windowEnd,
+            existingRecords: existingRecords
+        )
+        var eventsToCreate: [NewEvent] = []
+        var createdRecords: [SyncRecord] = []
+        let now = Date()
+
+        for newItem in diffResult.newEvents {
+            let event = newItem.event
+            let key = BlockerKey(
+                title: rule.blockerTitle(forSourceTitle: event.title),
+                startDate: event.startDate,
+                endDate: event.endDate,
+                isAllDay: event.isAllDay
+            )
+            guard let blocker = adoptableBlockers.removeValue(forKey: key) else {
+                eventsToCreate.append(newItem)
+                continue
+            }
+            createdRecords.append(SyncRecord(
+                sourceEventIdentifier: event.eventIdentifier,
+                sourceExternalIdentifier: event.calendarItemExternalIdentifier,
+                sourceStartDate: event.startDate,
+                sourceEndDate: event.endDate,
+                sourceIsAllDay: event.isAllDay,
+                sourceContentHash: newItem.contentHash,
+                blockerEventIdentifier: blocker.eventIdentifier,
+                blockerExternalIdentifier: blocker.calendarItemExternalIdentifier,
+                lastSyncedAt: now
+            ))
+        }
+
+        // ------------------------------------------------------------------
         // Step 6: Execute changes (unless dry run)
         // ------------------------------------------------------------------
 
         var errors: [SyncError] = []
-        var createdRecords: [SyncRecord] = []
         var updatedRecords: [SyncRecord] = []
         var removedChanges: [BlockerChange] = []
         var addedChanges: [BlockerChange] = []
         var updatedChanges: [BlockerChange] = []
-        let now = Date()
 
         if !dryRun {
             var operationCount = 0
 
             // --- Create blockers for NEW events ---
-            for newItem in diffResult.newEvents {
+            for newItem in eventsToCreate {
                 let event = newItem.event
                 do {
                     let blocker = try calendarService.createBlockerEvent(
@@ -294,7 +336,7 @@ public final class SyncEngine {
             }
         } else {
             // Dry run: populate change arrays for reporting without executing.
-            for newItem in diffResult.newEvents {
+            for newItem in eventsToCreate {
                 addedChanges.append(BlockerChange(
                     startDate: newItem.event.startDate,
                     endDate: newItem.event.endDate,
@@ -433,21 +475,35 @@ public final class SyncEngine {
             recordLookup[record.id] = record
         }
 
+        // Pair each event with its blocker content hash and record key.
+        // Build the same composite key that SyncRecord.id uses.
+        let candidates = sourceEvents.map { event in
+            (
+                event: event,
+                contentHash: ContentHasher.computeContentHash(
+                    startDate: event.startDate,
+                    endDate: event.endDate,
+                    isAllDay: event.isAllDay,
+                    blockerTitle: rule.blockerTitle(forSourceTitle: event.title)
+                ),
+                compositeKey: "\(event.eventIdentifier ?? "")_\(Int(event.startDate.timeIntervalSince1970))"
+            )
+        }
+
+        // Source events that would produce the very same blocker (same title
+        // and time) are mirrored once. Records of dropped duplicates end up
+        // orphaned below, which removes their redundant blockers.
+        let uniqueCandidates = BlockerDeduplicator.collapseDuplicates(
+            candidates,
+            contentHash: { $0.contentHash },
+            isAlreadyMirrored: { recordLookup[$0.compositeKey] != nil }
+        )
+
         var newEvents: [NewEvent] = []
         var changedEvents: [ChangedEvent] = []
         var matchedRecordIds: Set<String> = []
 
-        for event in sourceEvents {
-            let contentHash = ContentHasher.computeContentHash(
-                startDate: event.startDate,
-                endDate: event.endDate,
-                isAllDay: event.isAllDay,
-                blockerTitle: rule.blockerTitle(forSourceTitle: event.title)
-            )
-
-            // Build the same composite key that SyncRecord.id uses.
-            let compositeKey = "\(event.eventIdentifier ?? "")_\(Int(event.startDate.timeIntervalSince1970))"
-
+        for (event, contentHash, compositeKey) in uniqueCandidates {
             if let existingRecord = recordLookup[compositeKey] {
                 matchedRecordIds.insert(compositeKey)
 
@@ -485,6 +541,53 @@ public final class SyncEngine {
     }
 
     // MARK: - Private Helpers
+
+    /// Indexes, by title and time, the CalMirror blockers of the target calendar
+    /// that no sync record of this rule references.
+    ///
+    /// Such blockers appear when the record mapping was lost or went stale
+    /// (records file removed, save failure, identifiers changed by the server).
+    /// Only events carrying ``CalendarService/blockerNotesTag`` qualify: an
+    /// adopted blocker is later updated or deleted along with its source event,
+    /// which must never happen to an event the user created themselves.
+    /// Blockers still referenced by a record are excluded because they are
+    /// either already in use or about to be deleted as orphans.
+    ///
+    /// - Parameters:
+    ///   - calendar: The rule's target calendar.
+    ///   - startDate: Start of the sync window.
+    ///   - endDate: End of the sync window.
+    ///   - existingRecords: The rule's persisted sync records.
+    /// - Returns: Adoptable blocker events keyed by their title and time.
+    private func findAdoptableBlockers(
+        in calendar: EKCalendar,
+        from startDate: Date,
+        to endDate: Date,
+        existingRecords: [SyncRecord]
+    ) -> [BlockerKey: EKEvent] {
+        let claimedIdentifiers = Set(existingRecords.map(\.blockerEventIdentifier))
+        let claimedExternalIdentifiers = Set(existingRecords.map(\.blockerExternalIdentifier))
+
+        var adoptable: [BlockerKey: EKEvent] = [:]
+        for event in calendarService.fetchEvents(in: calendar, from: startDate, to: endDate) {
+            guard event.notes?.contains(CalendarService.blockerNotesTag) == true,
+                  !claimedIdentifiers.contains(event.eventIdentifier ?? ""),
+                  !claimedExternalIdentifiers.contains(event.calendarItemExternalIdentifier ?? "")
+            else { continue }
+
+            let key = BlockerKey(
+                title: event.title ?? "",
+                startDate: event.startDate,
+                endDate: event.endDate,
+                isAllDay: event.isAllDay
+            )
+            // Keep the first match; any further identical blocker stays untouched.
+            if adoptable[key] == nil {
+                adoptable[key] = event
+            }
+        }
+        return adoptable
+    }
 
     /// Looks up a blocker event using the sync record's stored identifiers.
     ///

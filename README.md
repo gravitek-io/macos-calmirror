@@ -83,6 +83,13 @@ rule it:
    detected through content hashing;
 4. deletes blockers whose source event was cancelled or moved out of the window.
 
+A blocker is never duplicated inside a target calendar: when several source
+events share the same title and time (an organizer re-sending a series, an
+account exposing it twice), they are mirrored as a single blocker, and a
+CalMirror blocker already present with that title and time is reused rather
+than recreated. Duplicates left by earlier versions are removed on the next
+sync.
+
 Two rules are enforced by design: the **source calendar is never modified**,
 and in the target calendar CalMirror **only touches its own blockers**. Every
 blocker carries a "Managed by CalMirror" tag in its notes; anything else in
