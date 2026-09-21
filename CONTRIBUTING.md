@@ -101,7 +101,9 @@ A pull request that breaks one of them will not be merged:
    and events without it are never updated or deleted.
 3. **Only the data the user opted into leaves the source event.** In mirror
    mode that is the title; with a fixed placeholder, nothing. Location,
-   notes, attendees, URLs, alarms and recurrence are never copied.
+   notes, attendees, URLs, alarms and recurrence are never copied. The only
+   other data written to a blocker is the list of opaque calendar identifiers
+   it derives from (`BlockerNotes`), which prevents mirror loops.
 4. **No network access.** CalMirror talks to Apple Calendar through EventKit
    and nothing else. No telemetry, no remote calls, no data leaving the Mac.
 

@@ -27,10 +27,10 @@ struct BlockerKey: Hashable {
 /// identifier, so without this guard each would get its own blocker.
 enum BlockerDeduplicator {
 
-    /// Keeps a single item per content hash, preserving the input order.
+    /// Keeps a single item per blocker key, preserving the input order.
     ///
-    /// The content hash (see ``ContentHasher``) covers exactly what defines a
-    /// blocker: title, start, end and all-day flag. Among items sharing a hash,
+    /// The ``BlockerKey`` covers what makes two blockers look identical in a
+    /// calendar: title, start, end and all-day flag. Among items sharing a key,
     /// the first one that is already mirrored is preferred so its existing
     /// blocker is reused; otherwise the first item wins. Dropped items that
     /// were mirrored lose their match in the diff, so their now-redundant
@@ -38,27 +38,27 @@ enum BlockerDeduplicator {
     ///
     /// - Parameters:
     ///   - items: Candidate source events, in fetch order.
-    ///   - contentHash: Returns the blocker content hash for an item.
+    ///   - blockerKey: Returns the key of the blocker an item would produce.
     ///   - isAlreadyMirrored: Returns `true` when a sync record exists for the item.
-    /// - Returns: The items to mirror, at most one per content hash.
-    static func collapseDuplicates<Item>(
+    /// - Returns: The items to mirror, at most one per blocker key.
+    static func collapseDuplicates<Item, Key: Hashable>(
         _ items: [Item],
-        contentHash: (Item) -> String,
+        blockerKey: (Item) -> Key,
         isAlreadyMirrored: (Item) -> Bool
     ) -> [Item] {
-        // Index of the representative chosen for each hash.
-        var representative: [String: Int] = [:]
-        var representativeIsMirrored: Set<String> = []
+        // Index of the representative chosen for each key.
+        var representative: [Key: Int] = [:]
+        var representativeIsMirrored: Set<Key> = []
 
         for (index, item) in items.enumerated() {
-            let hash = contentHash(item)
+            let key = blockerKey(item)
             let mirrored = isAlreadyMirrored(item)
 
-            if representative[hash] == nil || (mirrored && !representativeIsMirrored.contains(hash)) {
-                representative[hash] = index
+            if representative[key] == nil || (mirrored && !representativeIsMirrored.contains(key)) {
+                representative[key] = index
             }
             if mirrored {
-                representativeIsMirrored.insert(hash)
+                representativeIsMirrored.insert(key)
             }
         }
 

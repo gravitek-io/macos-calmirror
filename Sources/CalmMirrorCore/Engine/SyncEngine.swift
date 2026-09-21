@@ -9,7 +9,9 @@ import Foundation
 ///
 /// ## Algorithm Overview
 /// 1. Validate source and target calendars exist and are writable.
-/// 2. Fetch source events within the configured time window.
+/// 2. Fetch source events within the configured time window, skipping
+///    cancelled events and blockers that would loop back to a calendar they
+///    derive from (see ``BlockerNotes``).
 /// 3. Diff fetched events against persisted `SyncRecord` mappings, mirroring
 ///    source events with an identical title and time only once.
 /// 3b. Adopt matching CalMirror blockers already present in the target
@@ -118,7 +120,7 @@ public final class SyncEngine {
         let windowEnd = calendar.date(byAdding: .day, value: rule.windowDays, to: windowStart)!
 
         // ------------------------------------------------------------------
-        // Step 3: Fetch source events and filter cancelled ones
+        // Step 3: Fetch source events, filter cancelled and looping ones
         // ------------------------------------------------------------------
 
         let allSourceEvents = calendarService.fetchEvents(
@@ -127,7 +129,16 @@ public final class SyncEngine {
             to: windowEnd
         )
 
-        let sourceEvents = allSourceEvents.filter { $0.status != .canceled }
+        // A blocker is never mirrored back into a calendar it derives from:
+        // with two-way rules (A→B and B→A) it would otherwise bounce between
+        // both calendars forever. Chained rules (A→B, B→C) are unaffected.
+        let sourceEvents = allSourceEvents.filter { event in
+            event.status != .canceled
+                && !BlockerNotes.wouldLoop(
+                    sourceNotes: event.notes,
+                    targetCalendarIdentifier: rule.targetCalendarIdentifier
+                )
+        }
 
         // ------------------------------------------------------------------
         // Step 4: Load existing sync records
@@ -158,22 +169,17 @@ public final class SyncEngine {
             existingRecords: existingRecords
         )
         var eventsToCreate: [NewEvent] = []
+        var eventsToUpdate = diffResult.changedEvents
         var createdRecords: [SyncRecord] = []
         let now = Date()
 
         for newItem in diffResult.newEvents {
             let event = newItem.event
-            let key = BlockerKey(
-                title: rule.blockerTitle(forSourceTitle: event.title),
-                startDate: event.startDate,
-                endDate: event.endDate,
-                isAllDay: event.isAllDay
-            )
-            guard let blocker = adoptableBlockers.removeValue(forKey: key) else {
+            guard let blocker = adoptableBlockers.removeValue(forKey: blockerKey(for: event, rule: rule)) else {
                 eventsToCreate.append(newItem)
                 continue
             }
-            createdRecords.append(SyncRecord(
+            let record = SyncRecord(
                 sourceEventIdentifier: event.eventIdentifier,
                 sourceExternalIdentifier: event.calendarItemExternalIdentifier,
                 sourceStartDate: event.startDate,
@@ -183,7 +189,17 @@ public final class SyncEngine {
                 blockerEventIdentifier: blocker.eventIdentifier,
                 blockerExternalIdentifier: blocker.calendarItemExternalIdentifier,
                 lastSyncedAt: now
-            ))
+            )
+            if blocker.notes == blockerNotes(for: event, rule: rule) {
+                createdRecords.append(record)
+            } else {
+                // Adopted blocker lacks up-to-date origins: refresh it below.
+                eventsToUpdate.append(ChangedEvent(
+                    event: event,
+                    contentHash: newItem.contentHash,
+                    existingRecord: record
+                ))
+            }
         }
 
         // ------------------------------------------------------------------
@@ -209,6 +225,7 @@ public final class SyncEngine {
                         startDate: event.startDate,
                         endDate: event.endDate,
                         isAllDay: event.isAllDay,
+                        notes: blockerNotes(for: event, rule: rule),
                         commit: false
                     )
 
@@ -244,7 +261,7 @@ public final class SyncEngine {
             }
 
             // --- Update blockers for CHANGED events ---
-            for changedItem in diffResult.changedEvents {
+            for changedItem in eventsToUpdate {
                 let event = changedItem.event
                 let existingRecord = changedItem.existingRecord
 
@@ -264,6 +281,7 @@ public final class SyncEngine {
                         startDate: event.startDate,
                         endDate: event.endDate,
                         isAllDay: event.isAllDay,
+                        notes: blockerNotes(for: event, rule: rule),
                         commit: false
                     )
 
@@ -343,7 +361,7 @@ public final class SyncEngine {
                     isAllDay: newItem.event.isAllDay
                 ))
             }
-            for changedItem in diffResult.changedEvents {
+            for changedItem in eventsToUpdate {
                 updatedChanges.append(BlockerChange(
                     startDate: changedItem.event.startDate,
                     endDate: changedItem.event.endDate,
@@ -484,7 +502,11 @@ public final class SyncEngine {
                     startDate: event.startDate,
                     endDate: event.endDate,
                     isAllDay: event.isAllDay,
-                    blockerTitle: rule.blockerTitle(forSourceTitle: event.title)
+                    blockerTitle: rule.blockerTitle(forSourceTitle: event.title),
+                    origins: BlockerNotes.originsForBlocker(
+                        sourceNotes: event.notes,
+                        sourceCalendarIdentifier: rule.sourceCalendarIdentifier
+                    )
                 ),
                 compositeKey: "\(event.eventIdentifier ?? "")_\(Int(event.startDate.timeIntervalSince1970))"
             )
@@ -495,7 +517,7 @@ public final class SyncEngine {
         // orphaned below, which removes their redundant blockers.
         let uniqueCandidates = BlockerDeduplicator.collapseDuplicates(
             candidates,
-            contentHash: { $0.contentHash },
+            blockerKey: { blockerKey(for: $0.event, rule: rule) },
             isAlreadyMirrored: { recordLookup[$0.compositeKey] != nil }
         )
 
@@ -542,6 +564,25 @@ public final class SyncEngine {
 
     // MARK: - Private Helpers
 
+    /// Returns the title-and-time identity of the blocker mirroring a source event.
+    private func blockerKey(for event: EKEvent, rule: MirrorRule) -> BlockerKey {
+        BlockerKey(
+            title: rule.blockerTitle(forSourceTitle: event.title),
+            startDate: event.startDate,
+            endDate: event.endDate,
+            isAllDay: event.isAllDay
+        )
+    }
+
+    /// Returns the managed notes (tag + origin calendar chain) of the blocker
+    /// mirroring a source event.
+    private func blockerNotes(for event: EKEvent, rule: MirrorRule) -> String {
+        BlockerNotes.compose(origins: BlockerNotes.originsForBlocker(
+            sourceNotes: event.notes,
+            sourceCalendarIdentifier: rule.sourceCalendarIdentifier
+        ))
+    }
+
     /// Indexes, by title and time, the CalMirror blockers of the target calendar
     /// that no sync record of this rule references.
     ///
@@ -570,7 +611,7 @@ public final class SyncEngine {
 
         var adoptable: [BlockerKey: EKEvent] = [:]
         for event in calendarService.fetchEvents(in: calendar, from: startDate, to: endDate) {
-            guard event.notes?.contains(CalendarService.blockerNotesTag) == true,
+            guard BlockerNotes.isManaged(event.notes),
                   !claimedIdentifiers.contains(event.eventIdentifier ?? ""),
                   !claimedExternalIdentifiers.contains(event.calendarItemExternalIdentifier ?? "")
             else { continue }

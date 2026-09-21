@@ -18,7 +18,7 @@ final class BlockerDeduplicatorTests: XCTestCase {
     private func collapse(_ candidates: [Candidate]) -> [String] {
         BlockerDeduplicator.collapseDuplicates(
             candidates,
-            contentHash: \.hash,
+            blockerKey: \.hash,
             isAlreadyMirrored: \.mirrored
         ).map(\.name)
     }
