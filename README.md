@@ -90,10 +90,23 @@ CalMirror blocker already present with that title and time is reused rather
 than recreated. Duplicates left by earlier versions are removed on the next
 sync.
 
+Rules can be combined freely. They can be **chained** (A→B, then B→C) and
+they can go **both ways** (A→B and B→A): each blocker records, in its notes,
+the calendars it derives from, and a blocker is never mirrored back into one
+of them. Without that guard, two-way rules would bounce blockers between both
+calendars forever.
+
+```mermaid
+flowchart LR
+    E["Event in A"] -->|"rule A→B"| B1["Blocker in B<br/>Origins: A"]
+    B1 -->|"rule B→C (chain)"| C1["Blocker in C<br/>Origins: A, B"]
+    B1 -.->|"rule B→A: skipped,<br/>A is an origin"| E
+```
+
 Two rules are enforced by design: the **source calendar is never modified**,
 and in the target calendar CalMirror **only touches its own blockers**. Every
-blocker carries a "Managed by CalMirror" tag in its notes; anything else in
-the target calendar is left alone.
+blocker carries a "Managed by CalMirror" tag in its notes, followed by an
+`Origins:` line; anything else in the target calendar is left alone.
 
 ### Blocker titles
 
@@ -112,7 +125,9 @@ Each rule decides how its blockers are titled:
 In mirror mode the source event **title** is copied into the blocker, and
 only the title. Location, notes, attendees, URL, alarms and recurrence are
 never copied in either mode. Choose the fixed placeholder if you do not want
-event names to appear in the target calendar. Rules created before this
+event names to appear in the target calendar. The `Origins:` line of a
+blocker only lists opaque local calendar identifiers (UUIDs), never calendar
+names or event data. Rules created before this
 option existed keep using their fixed label.
 
 ## Requirements
@@ -218,7 +233,7 @@ macos-calmirror/
 ├── Sources/
 │   ├── CalmMirrorCore/          # Shared library
 │   │   ├── Models/              # MirrorRule, SyncRecord, SyncLog
-│   │   ├── Engine/              # SyncEngine, ContentHasher
+│   │   ├── Engine/              # SyncEngine, ContentHasher, BlockerDeduplicator, BlockerNotes
 │   │   ├── Storage/             # RuleStore, SyncRecordStore, SyncLogStore
 │   │   └── Calendar/            # CalendarService, LaunchdManager
 │   ├── CalmMirrorApp/           # SwiftUI windowed app

@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// Computes deterministic content hashes for event time properties.
+/// Computes deterministic content hashes of a blocker's desired state.
 ///
 /// Used by the sync engine to efficiently detect changes that require updating a
 /// blocker event without comparing full event objects. The hash covers the
@@ -20,12 +20,16 @@ public enum ContentHasher {
     ///     title in source-name mode) produces a new hash and triggers an update,
     ///     while placeholder-mode rules keep a constant title and avoid needless
     ///     updates.
+    ///   - origins: The blocker's origin calendar chain (see ``BlockerNotes``).
+    ///     Defaults to empty. Including it means blockers created before origins
+    ///     were recorded, or whose chain changed, are detected as needing an update.
     /// - Returns: A hex-encoded SHA-256 hash string.
     public static func computeContentHash(
         startDate: Date,
         endDate: Date,
         isAllDay: Bool,
-        blockerTitle: String = ""
+        blockerTitle: String = "",
+        origins: [String] = []
     ) -> String {
         var hasher = SHA256()
         let startInterval = startDate.timeIntervalSince1970
@@ -34,6 +38,10 @@ public enum ContentHasher {
         hasher.update(data: withUnsafeBytes(of: endInterval) { Data($0) })
         hasher.update(data: withUnsafeBytes(of: isAllDay) { Data($0) })
         hasher.update(data: Data(blockerTitle.utf8))
+        if !origins.isEmpty {
+            // Separator that cannot appear in a title line keeps the fields unambiguous.
+            hasher.update(data: Data("\norigins:\(origins.joined(separator: ","))".utf8))
+        }
         let digest = hasher.finalize()
         return digest.map { String(format: "%02x", $0) }.joined()
     }

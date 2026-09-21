@@ -30,6 +30,7 @@ public final class CalendarService {
 
     /// Tag placed in the notes field of every managed blocker event.
     /// Used as a safety-net identifier when the JSON mapping is unavailable.
+    /// The full notes format is defined by `BlockerNotes`.
     public static let blockerNotesTag = "Managed by CalMirror"
 
     // MARK: - Properties
@@ -168,7 +169,7 @@ public final class CalendarService {
     /// The event is configured with:
     /// - The specified calendar, title, dates, and all-day flag
     /// - Availability set to `.busy`
-    /// - Notes set to ``blockerNotesTag``
+    /// - Notes set to the given CalMirror-managed text (tag + origin calendars)
     ///
     /// The only source data that may appear is the title, when the rule mirrors
     /// the source event name (see `MirrorRule.blockerTitle(forSourceTitle:)`).
@@ -183,6 +184,7 @@ public final class CalendarService {
     ///   - startDate: The blocker's start time.
     ///   - endDate: The blocker's end time.
     ///   - isAllDay: Whether the blocker spans the entire day.
+    ///   - notes: The managed notes, built by `BlockerNotes.compose(origins:)`.
     ///   - commit: If `true`, the change is committed immediately. Pass `false`
     ///     when batching multiple operations and call ``commitChanges()`` afterward.
     /// - Returns: The newly created and saved `EKEvent`.
@@ -194,6 +196,7 @@ public final class CalendarService {
         startDate: Date,
         endDate: Date,
         isAllDay: Bool,
+        notes: String,
         commit: Bool
     ) throws -> EKEvent {
         let event = EKEvent(eventStore: eventStore)
@@ -203,7 +206,7 @@ public final class CalendarService {
         event.endDate = endDate
         event.isAllDay = isAllDay
         event.availability = .busy
-        event.notes = Self.blockerNotesTag
+        event.notes = notes
 
         // Explicitly ensure no extraneous data is attached.
         event.location = nil
@@ -216,9 +219,9 @@ public final class CalendarService {
         return event
     }
 
-    /// Updates the title and time properties of an existing blocker event.
+    /// Updates the title, time properties and managed notes of an existing blocker event.
     ///
-    /// Only `title`, `startDate`, `endDate`, and `isAllDay` are modified. All
+    /// Only `title`, `startDate`, `endDate`, `isAllDay` and `notes` are modified. All
     /// other fields remain unchanged to preserve the event's identity and avoid
     /// accidentally overwriting user edits to non-managed fields. The title is
     /// updated so that a renamed source event (in source-name mode) is reflected
@@ -231,6 +234,7 @@ public final class CalendarService {
     ///   - startDate: The new start time.
     ///   - endDate: The new end time.
     ///   - isAllDay: The new all-day flag.
+    ///   - notes: The managed notes, built by `BlockerNotes.compose(origins:)`.
     ///   - commit: If `true`, the change is committed immediately. Pass `false`
     ///     when batching and call ``commitChanges()`` afterward.
     /// - Throws: An `EKError` if the save operation fails.
@@ -240,8 +244,10 @@ public final class CalendarService {
         startDate: Date,
         endDate: Date,
         isAllDay: Bool,
+        notes: String,
         commit: Bool
     ) throws {
+        event.notes = notes
         event.title = title
         event.startDate = startDate
         event.endDate = endDate
