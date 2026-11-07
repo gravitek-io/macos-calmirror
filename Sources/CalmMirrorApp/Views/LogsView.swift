@@ -48,20 +48,26 @@ struct LogsView: View {
     // MARK: - Body
 
     var body: some View {
-        Group {
-            if let loadError {
-                errorStateView(message: loadError)
-            } else if logs.isEmpty {
-                emptyStateView
-            } else {
-                logListView
+        VStack(spacing: 0) {
+            PageHeading(title: "Sync Activity", subtitle: "A history of changes made to your calendars.")
+                .padding(24)
+            Group {
+                if let loadError {
+                    errorStateView(message: loadError)
+                } else if logs.isEmpty {
+                    emptyStateView
+                } else {
+                    logListView
+                }
             }
         }
-        .frame(minWidth: 500, minHeight: 300)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .navigationTitle("Sync Activity")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    refreshLogs()
+                    Task { await refreshLogs() }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
@@ -69,7 +75,7 @@ struct LogsView: View {
             }
         }
         .onAppear {
-            refreshLogs()
+            Task { await refreshLogs() }
         }
     }
 
@@ -77,17 +83,8 @@ struct LogsView: View {
 
     /// Placeholder shown when no sync logs have been recorded yet.
     private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 40))
-                .foregroundStyle(.secondary)
-
-            Text("No sync logs yet. Run a sync to see results here.")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ContentUnavailableView("No activity yet", systemImage: "clock.arrow.circlepath",
+                               description: Text("Your sync results will appear here after the first run."))
     }
 
     /// Error state shown when the log store fails to initialise.
@@ -115,8 +112,13 @@ struct LogsView: View {
         List {
             ForEach(logs) { log in
                 logRow(for: log)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 24, bottom: 4, trailing: 24))
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
     }
 
     /// A single expandable row displaying a sync log summary and detail.
@@ -133,7 +135,9 @@ struct LogsView: View {
         } label: {
             logSummaryRow(for: log)
         }
-        .padding(.vertical, 2)
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.07)))
     }
 
     /// The collapsed summary content for a single log entry.
@@ -142,34 +146,21 @@ struct LogsView: View {
     ///
     /// - Parameter log: The sync log entry to summarise.
     private func logSummaryRow(for log: SyncLog) -> some View {
-        HStack(spacing: 10) {
-            // Status icon: green checkmark for success, red X for errors
+        HStack(spacing: 12) {
             statusIcon(for: log)
-
-            // Timestamp
-            Text(Self.timestampFormatter.string(from: log.timestamp))
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.primary)
-
-            // Change summary: "+N added, -N removed, ~N updated"
-            Text(changeSummary(for: log))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
-            Spacer()
-
-            // Rule label resolved from the rule store
-            Text(ruleLabel(for: log.ruleId))
-                .font(.caption)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.quaternary)
-                .clipShape(Capsule())
-
-            // Duration
-            Text(formattedDuration(log.durationSeconds))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .frame(width: 32, height: 32)
+                .background((log.isSuccess ? Color.green : Color.red).opacity(0.08), in: Circle())
+            VStack(alignment: .leading, spacing: 5) {
+                Text(ruleLabel(for: log.ruleId)).font(.headline).lineLimit(1)
+                Text(changeSummary(for: log)).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 12)
+            VStack(alignment: .trailing, spacing: 5) {
+                Text(log.timestamp, format: .dateTime.month(.abbreviated).day().hour().minute())
+                    .font(.caption).foregroundStyle(.secondary)
+                Text(formattedDuration(log.durationSeconds))
+                    .font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
+            }
         }
     }
 
@@ -343,16 +334,22 @@ struct LogsView: View {
     /// Logs are sorted most recent first for chronological display.
     /// Rules are loaded once to enable efficient label lookups by rule ID.
     /// Any initialisation error from `SyncLogStore` is captured and displayed.
-    private func refreshLogs() {
+    private func refreshLogs() async {
         loadError = nil
-        rules = RuleStore().loadRules()
-
-        do {
-            let store = try SyncLogStore()
-            logs = store.loadLogs().sorted { $0.timestamp > $1.timestamp }
-        } catch {
+        let result = await Task.detached(priority: .utility) { () -> Result<([MirrorRule], [SyncLog]), NSError> in
+            do {
+                let loadedRules = RuleStore().loadRules()
+                let loadedLogs = try SyncLogStore().loadLogs().sorted { $0.timestamp > $1.timestamp }
+                return .success((loadedRules, loadedLogs))
+            } catch { return .failure(NSError(domain: "CalMirror.LogRead", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: error.localizedDescription])) }
+        }.value
+        switch result {
+        case .success(let loaded):
+            rules = loaded.0
+            logs = loaded.1
+        case .failure(let error):
             loadError = error.localizedDescription
-            logs = []
         }
     }
 }

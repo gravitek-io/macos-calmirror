@@ -27,11 +27,11 @@ struct RulesListView: View {
     /// The current snapshot of all persisted rules, refreshed after every mutation.
     @State private var rules: [MirrorRule] = []
 
-    /// Controls presentation of the rule editor sheet for adding or editing a rule.
-    @State private var isEditorPresented = false
-
-    /// The rule currently being edited, or `nil` when adding a new rule.
-    @State private var ruleBeingEdited: MirrorRule?
+    private struct EditorRequest: Identifiable {
+        let id = UUID()
+        let rule: MirrorRule?
+    }
+    @State private var editorRequest: EditorRequest?
 
     /// Shared coordinator used to trigger syncs and read per-rule outcomes.
     @Environment(SyncCoordinator.self) private var syncCoordinator
@@ -41,168 +41,152 @@ struct RulesListView: View {
         rules.contains(where: \.isEnabled)
     }
 
+    @State private var searchText = ""
+    @State private var filter = "All"
+    @State private var ruleToDelete: MirrorRule?
+    @State private var operationError: String?
+    @State private var rulesReadError: String?
+
+    private var visibleRules: [MirrorRule] {
+        rules.filter { rule in
+            let matchesStatus = filter == "All" || (filter == "Active" ? rule.isEnabled : !rule.isEnabled)
+            let searchable = [rule.title, calendarName(rule.sourceCalendarIdentifier),
+                              calendarName(rule.targetCalendarIdentifier)].joined(separator: " ")
+            return matchesStatus && (searchText.isEmpty || searchable.localizedCaseInsensitiveContains(searchText))
+        }
+    }
+
     // MARK: - Body
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if rules.isEmpty {
-                    emptyStateView
-                } else {
-                    ruleListView
-                }
-            }
-            .frame(minWidth: 480, minHeight: 260)
-            .navigationTitle("Rules")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    // Tooltips are attached to the labels: on macOS 26 a
-                    // `.help` placed on the toolbar button itself is not shown.
-                    Button {
-                        syncCoordinator.requestSync()
-                    } label: {
-                        Label("Sync Now", systemImage: "arrow.triangle.2.circlepath")
-                            .help(syncNowHelp)
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 22) {
+                PageHeading(title: "Mirror Rules", subtitle: "Choose where your availability is shared.")
+                HStack(spacing: 8) {
+                    StatusPill(title: "\(rules.filter(\.isEnabled).count) active", symbol: "circle.fill", color: .green)
+                    StatusPill(title: "\(rules.filter { !$0.isEnabled }.count) paused", symbol: "pause.fill")
+                    Spacer()
+                    Picker("Show rules", selection: $filter) {
+                        ForEach(["All", "Active", "Paused"], id: \.self) { Text($0).tag($0) }
                     }
-                    .disabled(syncCoordinator.isSyncing || !hasEnabledRule)
+                    .pickerStyle(.segmented).frame(width: 200)
                 }
-
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        presentEditor(for: nil)
-                    } label: {
-                        Label("Add Rule", systemImage: "plus")
-                            .help("Add a new mirror rule")
+            }
+            .padding(24)
+            if let rulesReadError {
+                ContentUnavailableView {
+                    Label("Couldn’t read mirror rules", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(rulesReadError)
+                } actions: {
+                    Button("Try Again") { refreshRules() }
+                }
+            } else if rules.isEmpty {
+                ContentUnavailableView {
+                    Label("Connect your calendars", systemImage: "calendar.badge.plus")
+                } description: {
+                    Text("Create a rule to copy busy time from one calendar to another.")
+                } actions: {
+                    Button("Create a Rule", systemImage: "plus") { presentEditor(for: nil) }
+                        .buttonStyle(.borderedProminent)
+                }
+            } else if visibleRules.isEmpty {
+                ContentUnavailableView.search(text: searchText)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(visibleRules) { rule in ruleRow(for: rule) }
                     }
+                    .padding(.horizontal, 24).padding(.bottom, 24)
                 }
             }
-            .onAppear {
-                refreshRules()
-                syncCoordinator.refresh()
-            }
-            .onChange(of: isEditorPresented) { _, isPresented in
-                // Refresh the list when returning from the editor, regardless of
-                // whether the user saved or cancelled, so any changes are visible.
-                if !isPresented {
-                    refreshRules()
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .navigationTitle("Mirror Rules")
+        .searchable(text: $searchText, prompt: "Find a rule or calendar")
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button { syncCoordinator.requestSync() } label: {
+                    Label("Sync Now", systemImage: "arrow.triangle.2.circlepath")
                 }
-            }
-            .navigationDestination(isPresented: $isEditorPresented) {
-                RuleEditorView(
-                    ruleStore: ruleStore,
-                    existingRule: ruleBeingEdited,
-                    // A created or edited rule is synced right away so the
-                    // blockers appear without waiting for the schedule.
-                    onSave: { syncCoordinator.requestSync() }
-                )
+                .help(syncNowHelp)
+                .disabled(syncCoordinator.isSyncing || !hasEnabledRule)
+                Button { presentEditor(for: nil) } label: {
+                    Label("New Rule", systemImage: "plus")
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                .help("Create a mirror rule")
             }
         }
-    }
-
-    // MARK: - Subviews
-
-    /// Placeholder shown when no rules have been configured yet.
-    private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "calendar.badge.plus")
-                .font(.system(size: 40))
-                .foregroundStyle(.secondary)
-
-            Text("No rules configured")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-
-            Button("Add Rule") {
-                presentEditor(for: nil)
+        .onAppear { refreshRules(); syncCoordinator.refresh() }
+        .sheet(item: $editorRequest, onDismiss: refreshRules) { request in
+            NavigationStack {
+                RuleEditorView(ruleStore: ruleStore, existingRule: request.rule,
+                               onSave: { refreshRules(); syncCoordinator.requestSync() })
             }
-            .controlSize(.large)
+            .frame(width: 570, height: 700)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    /// The main list of configured mirror rules.
-    private var ruleListView: some View {
-        List {
-            ForEach(rules) { rule in
-                ruleRow(for: rule)
+        .confirmationDialog("Delete this mirror rule?", isPresented: Binding(
+            get: { ruleToDelete != nil }, set: { if !$0 { ruleToDelete = nil } }
+        ), titleVisibility: .visible) {
+            if let rule = ruleToDelete {
+                Button("Delete Rule", role: .destructive) { deleteRule(rule); ruleToDelete = nil }
             }
+        } message: {
+            Text("Its managed Busy blocks will be removed. Original calendar events will stay in place.")
         }
+        .alert("Couldn’t update rule", isPresented: Binding(
+            get: { operationError != nil }, set: { if !$0 { operationError = nil } }
+        )) { Button("OK") { operationError = nil } } message: { Text(operationError ?? "") }
     }
 
-    /// A single row displaying a mirror rule's summary and action controls.
-    ///
-    /// Layout:
-    /// - Leading: blocker label (primary) with optional warning badge when a
-    ///   referenced calendar is unavailable (T049), source/target identifiers (secondary)
-    /// - Trailing: window days badge, enable/disable toggle, edit button, delete button
-    @ViewBuilder
+    private func calendarName(_ id: String) -> String {
+        CalendarService.shared.calendar(withIdentifier: id)?.title ?? "Unavailable calendar"
+    }
+
+    private func calendarColor(_ calendar: EKCalendar?) -> Color {
+        guard let color = calendar?.cgColor else { return .secondary }
+        return Color(cgColor: color)
+    }
+
+    /// Resolve each endpoint once for a consistent card snapshot, without
+    /// retaining EventKit objects across render passes.
     private func ruleRow(for rule: MirrorRule) -> some View {
-        HStack(spacing: 12) {
-            // Rule summary on the leading side
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(rule.title)
-                        .font(.headline)
-                        .lineLimit(1)
-
-                    // Warning badge shown when a referenced calendar is unavailable (T049).
-                    // The tooltip explains which calendar(s) can no longer be resolved.
-                    if let warning = unavailableCalendarWarning(for: rule) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                            .help(warning)
-                    }
-                }
-
-                Text("\(truncatedIdentifier(rule.sourceCalendarIdentifier)) → \(truncatedIdentifier(rule.targetCalendarIdentifier))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
+        let source = CalendarService.shared.calendar(withIdentifier: rule.sourceCalendarIdentifier)
+        let target = CalendarService.shared.calendar(withIdentifier: rule.targetCalendarIdentifier)
+        return RuleCard(title: rule.title,
+                 sourceName: source?.title ?? "Unavailable calendar",
+                 sourceAccount: source?.source?.title ?? "Check calendar access",
+                 sourceColor: calendarColor(source),
+                 targetName: target?.title ?? "Unavailable calendar",
+                 targetAccount: target?.source?.title ?? "Check calendar access",
+                 targetColor: calendarColor(target),
+                 days: rule.windowDays, isEnabled: rule.isEnabled,
+                 isPrivate: rule.usePlaceholder, allowsChaining: false) {
+            Toggle("Enable \(rule.title)", isOn: toggleBinding(for: rule))
+                .toggleStyle(.switch).controlSize(.small).labelsHidden()
+            Menu {
+                Button("Edit Rule", systemImage: "pencil") { presentEditor(for: rule) }
+                Divider()
+                Button("Delete Rule…", systemImage: "trash", role: .destructive) { ruleToDelete = rule }
+            } label: {
+                Image(systemName: "ellipsis").frame(width: 22, height: 22)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Rule actions")
+            .accessibilityLabel("Actions for \(rule.title)")
+        } status: {
+            if let warning = unavailableCalendarWarning(sourceAvailable: source != nil, targetAvailable: target != nil) {
+                Label(warning, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            } else {
                 lastSyncCaption(for: rule)
             }
-
-            Spacer()
-
-            // Window days badge
-            Text("\(rule.windowDays)d")
-                .font(.caption)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.quaternary)
-                .clipShape(Capsule())
-
-            // Enable / disable toggle
-            Toggle(isOn: toggleBinding(for: rule)) {
-                // Label is intentionally empty; the toggle speaks for itself
-                // alongside the row context.
-                EmptyView()
-            }
-            .toggleStyle(.switch)
-            .labelsHidden()
-            .help(rule.isEnabled ? "Disable rule" : "Enable rule")
-
-            // Edit button
-            Button {
-                presentEditor(for: rule)
-            } label: {
-                Label("Edit", systemImage: "pencil")
-                    .labelStyle(.iconOnly)
-            }
-            .buttonStyle(.borderless)
-            .help("Edit rule")
-
-            // Delete button
-            Button(role: .destructive) {
-                deleteRule(rule)
-            } label: {
-                Label("Delete", systemImage: "trash")
-                    .labelStyle(.iconOnly)
-            }
-            .buttonStyle(.borderless)
-            .help("Delete rule")
         }
-        .padding(.vertical, 4)
+        .contextMenu {
+            Button("Edit Rule", systemImage: "pencil") { presentEditor(for: rule) }
+            Button("Delete Rule…", systemImage: "trash", role: .destructive) { ruleToDelete = rule }
+        }
     }
 
     /// One-line summary of the rule's most recent sync, from the log store.
@@ -258,37 +242,8 @@ struct RulesListView: View {
         "+\(log.addedCount) added, ~\(log.updatedCount) updated, -\(log.removedCount) removed"
     }
 
-    /// Returns the first 8 characters of a calendar identifier for compact display.
-    ///
-    /// Calendar identifiers are typically long UUIDs; showing only the prefix
-    /// keeps the row visually clean while still being identifiable.
-    ///
-    /// - Parameter identifier: The full calendar identifier string.
-    /// - Returns: A prefix of up to 8 characters.
-    private func truncatedIdentifier(_ identifier: String) -> String {
-        String(identifier.prefix(8))
-    }
-
-    /// Checks whether the source and/or target calendars referenced by a rule
-    /// are still available in the system (T049).
-    ///
-    /// A calendar may become unavailable if the user removes the calendar,
-    /// deletes the associated account, or has its access revoked by an
-    /// administrator. This method uses `CalendarService.shared` to resolve
-    /// each identifier and returns a human-readable warning message when
-    /// one or both calendars are missing.
-    ///
-    /// - Parameter rule: The mirror rule whose calendar references to verify.
-    /// - Returns: A warning message describing which calendar(s) are unavailable,
-    ///   or `nil` if both calendars are still present.
-    private func unavailableCalendarWarning(for rule: MirrorRule) -> String? {
-        let sourceAvailable = CalendarService.shared.calendar(
-            withIdentifier: rule.sourceCalendarIdentifier
-        ) != nil
-        let targetAvailable = CalendarService.shared.calendar(
-            withIdentifier: rule.targetCalendarIdentifier
-        ) != nil
-
+    /// Describes availability using the same endpoint snapshot shown on the card.
+    private func unavailableCalendarWarning(sourceAvailable: Bool, targetAvailable: Bool) -> String? {
         switch (sourceAvailable, targetAvailable) {
         case (true, true):
             return nil
@@ -321,41 +276,43 @@ struct RulesListView: View {
     ///
     /// - Parameter rule: The rule to edit, or `nil` to create a new one.
     private func presentEditor(for rule: MirrorRule?) {
-        ruleBeingEdited = rule
-        isEditorPresented = true
+        editorRequest = EditorRequest(rule: rule)
     }
 
     // MARK: - Store Operations
 
     /// Reloads the full rule list from the store into local state.
     private func refreshRules() {
-        rules = ruleStore.loadRules()
+        do {
+            rules = ruleStore.loadRules()
+            rulesReadError = nil
+        } catch {
+            rulesReadError = error.localizedDescription
+        }
     }
 
     /// Enables or disables a rule and refreshes the list.
-    ///
-    /// Errors are silently ignored here because the rule was just loaded from the
-    /// same store and is expected to exist. A production-grade error surface
-    /// (alert or toast) can be added in a future polish pass.
     ///
     /// - Parameters:
     ///   - rule: The rule to toggle.
     ///   - enabled: The desired enabled state.
     private func toggleRule(_ rule: MirrorRule, enabled: Bool) {
+        var didUpdate = false
         do {
             if enabled {
                 try ruleStore.enableRule(id: rule.id)
             } else {
                 try ruleStore.disableRule(id: rule.id)
             }
+            didUpdate = true
         } catch {
-            // Log-worthy but non-fatal; the refresh below will reconcile state.
+            operationError = error.localizedDescription
         }
         refreshRules()
 
         // Re-enabling a rule is like creating it: sync right away so its
         // blockers come back without waiting for the schedule.
-        if enabled {
+        if didUpdate && enabled {
             syncCoordinator.requestSync()
         }
     }
@@ -376,7 +333,7 @@ struct RulesListView: View {
                 calendarService: CalendarService.shared
             )
         } catch {
-            // Non-fatal; refresh will reconcile.
+            operationError = error.localizedDescription
         }
         refreshRules()
     }

@@ -35,9 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 /// rules and review sync logs. It can be quit freely — background sync is
 /// handled by the launchd agent (`calmirror sync`) independently.
 ///
-/// The main window presents a ``TabView`` with two tabs:
-/// - **Rules**: manage mirror rule configuration via ``RulesListView``.
-/// - **Logs**: review sync execution history via ``LogsView``.
+/// The main window uses a native sidebar for mirror rules and sync activity.
 @main
 struct CalmMirrorApp: App {
 
@@ -50,11 +48,11 @@ struct CalmMirrorApp: App {
         WindowGroup("CalMirror") {
             ContentView()
         }
-        .defaultSize(width: 600, height: 450)
+        .defaultSize(width: 960, height: 720)
     }
 }
 
-/// Root content view hosting the tab interface.
+/// Root content view hosting sidebar navigation.
 ///
 /// Separated from the `App` struct to allow the `.onAppear` activation
 /// modifier to fire reliably on first window presentation.
@@ -70,39 +68,48 @@ private struct ContentView: View {
     /// so the rules tab, the footer and the editor observe the same state.
     @State private var syncCoordinator = SyncCoordinator()
 
-    /// The selected tab, owned explicitly rather than left to `TabView`.
-    ///
-    /// Without a selection binding, the macOS `TabView` reverts to the
-    /// previous tab when the newly shown tab mutates its state while
-    /// appearing, which ``LogsView`` does when it loads the logs. The first
-    /// click on "Logs" then appears to do nothing; holding the selection
-    /// here makes it the single source of truth and keeps the switch.
+    /// The selected workspace section.
     @State private var selectedTab: Tab = .rules
 
     var body: some View {
-        VStack(spacing: 0) {
-            TabView(selection: $selectedTab) {
-                RulesListView()
-                    .tabItem {
-                        Label("Rules", systemImage: "list.bullet")
+        NavigationSplitView {
+            VStack(spacing: 0) {
+                List(selection: $selectedTab) {
+                    Section("Workspace") {
+                        Label("Mirror Rules", systemImage: "arrow.triangle.branch")
+                            .tag(Tab.rules)
+                        Label("Sync Activity", systemImage: "clock.arrow.circlepath")
+                            .tag(Tab.logs)
                     }
-                    .tag(Tab.rules)
-
-                LogsView()
-                    .tabItem {
-                        Label("Logs", systemImage: "doc.text")
-                    }
-                    .tag(Tab.logs)
+                }
+                .listStyle(.sidebar)
+                Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("On-device syncing", systemImage: "desktopcomputer")
+                        .font(.caption.weight(.medium))
+                    Text("Your calendars stay connected through macOS.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(18)
             }
-
-            Divider()
-            WindowFooter()
+            .navigationTitle("CalMirror")
+            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 250)
+        } detail: {
+            VStack(spacing: 0) {
+                Group {
+                    switch selectedTab {
+                    case .rules: RulesListView()
+                    case .logs: LogsView()
+                    }
+                }
+                Divider()
+                WindowFooter()
+            }
         }
-        .frame(minWidth: 550, minHeight: 400)
+        .frame(minWidth: 850, minHeight: 580)
         .environment(syncCoordinator)
-        .onAppear {
-            syncCoordinator.refresh()
-        }
+        .onAppear { syncCoordinator.refresh() }
     }
 }
 
@@ -137,8 +144,8 @@ private struct WindowFooter: View {
                 .font(.caption)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 9)
         .background(.bar)
     }
 
