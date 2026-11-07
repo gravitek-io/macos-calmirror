@@ -31,6 +31,14 @@ public enum LaunchdManagerError: Error, LocalizedError {
     }
 }
 
+/// A schedule change cannot reload an agent while it is syncing.
+public enum SyncScheduleError: Error, LocalizedError {
+    case syncInProgress
+    public var errorDescription: String? {
+        "A sync is running. Wait for it to finish, then apply the interval."
+    }
+}
+
 // MARK: - AgentStatus
 
 /// Describes the current state of the CalmMirror launchd sync agent.
@@ -102,8 +110,14 @@ public final class LaunchdManager {
     /// The plist filename written to ~/Library/LaunchAgents/.
     public static let plistFilename = "com.gravitek.calmirror.sync.plist"
 
-    /// Sync interval in seconds (15 minutes).
-    public static let syncInterval = 900
+    /// Default sync interval in seconds (15 minutes).
+    public static let defaultSyncInterval = 900
+    public static let syncIntervalPreferenceKey = "syncIntervalSeconds"
+    public static let allowedSyncIntervals = [300, 600, 900, 1800, 3600]
+    public static var syncInterval: Int {
+        let value = UserDefaults(suiteName: "com.gravitek.calmirror")?.integer(forKey: syncIntervalPreferenceKey) ?? 0
+        return allowedSyncIntervals.contains(value) ? value : defaultSyncInterval
+    }
 
     /// Path for the agent's stdout log output.
     private static let stdoutLogPath = "/tmp/calmirror.stdout.log"
@@ -111,10 +125,27 @@ public final class LaunchdManager {
     /// Path for the agent's stderr log output.
     private static let stderrLogPath = "/tmp/calmirror.stderr.log"
 
+    private let plistURLOverride: URL?
+    private let preferences: UserDefaults
+    private let commandRunner: (([String]) throws -> Void)?
+    private let runStateProvider: (() -> (running: Bool, pid: Int?))?
+
     // MARK: - Initialization
 
     /// Creates a new launchd manager instance.
-    public init() {}
+    public convenience init() {
+        self.init(plistURL: nil, preferences: UserDefaults(suiteName: "com.gravitek.calmirror") ?? .standard,
+                  commandRunner: nil, runStateProvider: nil)
+    }
+
+    internal init(plistURL: URL?, preferences: UserDefaults,
+                  commandRunner: (([String]) throws -> Void)?,
+                  runStateProvider: (() -> (running: Bool, pid: Int?))? = { (false, nil) }) {
+        self.plistURLOverride = plistURL
+        self.preferences = preferences
+        self.commandRunner = commandRunner
+        self.runStateProvider = runStateProvider
+    }
 
     // MARK: - Plist Location
 
@@ -125,6 +156,7 @@ public final class LaunchdManager {
     ///
     /// - Returns: The file URL for the agent plist.
     public func plistURL() -> URL {
+        if let plistURLOverride { return plistURLOverride }
         let launchAgentsDir = FileManager.default
             .homeDirectoryForCurrentUser
             .appendingPathComponent("Library/LaunchAgents")
@@ -171,7 +203,7 @@ public final class LaunchdManager {
         let resolvedPath = try resolveCLIPath(explicit: cliPath)
 
         // Generate the plist XML content.
-        let plistContent = generatePlistContent(cliPath: resolvedPath)
+        let plistContent = generatePlistContent(cliPath: resolvedPath, interval: configuredSyncInterval, runAtLoad: true)
 
         // Ensure the LaunchAgents directory exists.
         let plistFileURL = plistURL()
@@ -183,6 +215,46 @@ public final class LaunchdManager {
 
         // Bootstrap the agent into the current user's GUI domain.
         try bootstrapAgent(plistPath: plistFileURL.path)
+    }
+
+    /// Persists and applies a supported interval. When the agent is installed,
+    /// rewrite its plist and reload the service so launchd uses the new value.
+    public func setSyncInterval(_ seconds: Int) throws {
+        guard Self.allowedSyncIntervals.contains(seconds) else {
+            throw LaunchdManagerError.plistWriteFailed("Unsupported sync interval.")
+        }
+        guard isInstalled() else {
+            preferences.set(seconds, forKey: Self.syncIntervalPreferenceKey)
+            return
+        }
+        guard !queryAgentRunState().running else { throw SyncScheduleError.syncInProgress }
+        let url = plistURL()
+        let oldPlist = try Data(contentsOf: url)
+        guard var plist = try PropertyListSerialization.propertyList(from: oldPlist, format: nil) as? [String: Any],
+              let arguments = plist["ProgramArguments"] as? [String], !arguments.isEmpty else {
+            throw LaunchdManagerError.plistWriteFailed("Installed agent has no CLI path.")
+        }
+        plist["StartInterval"] = seconds
+        plist["RunAtLoad"] = false
+        let xml = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        guard let content = String(data: xml, encoding: .utf8) else {
+            throw LaunchdManagerError.plistWriteFailed("Could not encode agent plist.")
+        }
+        try runCommand(["bootout", "gui/\(currentUID())/\(Self.serviceLabel)"])
+        do {
+            try writePlistFile(content: content, to: url)
+            try bootstrapAgent(plistPath: url.path)
+        } catch {
+            let reloadError = error
+            do {
+                try oldPlist.write(to: url, options: .atomic)
+                try bootstrapAgent(plistPath: url.path)
+            } catch {
+                throw LaunchdManagerError.launchctlFailed("The new schedule failed: \(reloadError.localizedDescription) Restoring the old schedule also failed: \(error.localizedDescription)")
+            }
+            throw reloadError
+        }
+        preferences.set(seconds, forKey: Self.syncIntervalPreferenceKey)
     }
 
     // MARK: - Uninstall
@@ -251,8 +323,16 @@ public final class LaunchdManager {
             running: running,
             pid: pid,
             plistPath: plistURL().path,
-            intervalSeconds: Self.syncInterval
+            intervalSeconds: installedInterval ?? configuredSyncInterval
         )
+    }
+
+    /// Reads the interval launchd receives from the installed plist.
+    private var installedInterval: Int? {
+        guard let data = try? Data(contentsOf: plistURL()),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        else { return nil }
+        return plist["StartInterval"] as? Int
     }
 
     // MARK: - Kickstart
@@ -343,7 +423,12 @@ public final class LaunchdManager {
     ///
     /// - Parameter cliPath: The resolved absolute path to the `calmirror` binary.
     /// - Returns: The plist XML content as a string.
-    private func generatePlistContent(cliPath: String) -> String {
+    private var configuredSyncInterval: Int {
+        let value = preferences.integer(forKey: Self.syncIntervalPreferenceKey)
+        return Self.allowedSyncIntervals.contains(value) ? value : Self.defaultSyncInterval
+    }
+
+    private func generatePlistContent(cliPath: String, interval: Int, runAtLoad: Bool) -> String {
         """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" \
@@ -358,11 +443,11 @@ public final class LaunchdManager {
                 <string>sync</string>
             </array>
             <key>StartInterval</key>
-            <integer>\(Self.syncInterval)</integer>
+            <integer>\(interval)</integer>
             <key>ProcessType</key>
             <string>Background</string>
             <key>RunAtLoad</key>
-            <true/>
+            <\(runAtLoad ? "true" : "false")/>
             <key>StandardOutPath</key>
             <string>\(Self.stdoutLogPath)</string>
             <key>StandardErrorPath</key>
@@ -444,7 +529,12 @@ public final class LaunchdManager {
     ///   bootstrap command exits with a non-zero status.
     private func bootstrapAgent(plistPath: String) throws {
         let domainTarget = "gui/\(currentUID())"
-        try runLaunchctl(["bootstrap", domainTarget, plistPath])
+        try runCommand(["bootstrap", domainTarget, plistPath])
+    }
+
+    private func runCommand(_ arguments: [String]) throws {
+        if let commandRunner { try commandRunner(arguments) }
+        else { try runLaunchctl(arguments) }
     }
 
     /// Runs `/bin/launchctl` with the given arguments and waits for it to exit.
@@ -496,6 +586,7 @@ public final class LaunchdManager {
     /// - Returns: A tuple of `(running, pid)` where `running` indicates whether
     ///   the agent is loaded and `pid` is the process ID if available.
     private func queryAgentRunState() -> (running: Bool, pid: Int?) {
+        if let runStateProvider { return runStateProvider() }
         let uid = currentUID()
         let serviceTarget = "gui/\(uid)/\(Self.serviceLabel)"
 
