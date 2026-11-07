@@ -70,7 +70,9 @@ What this means in practice:
 
 ### The sync cycle
 
-A launchd agent runs `calmirror sync` every 15 minutes, and the app asks
+A launchd agent runs `calmirror sync` every 15 minutes by default. Choose 5, 10,
+15, 30, or 60 minutes in the Schedule tab. Apply the change after an active
+sync finishes. The app asks
 launchd to run it immediately when you press **Sync Now** or save a rule. In
 every case the agent is the only process writing to the calendars. For each
 rule it:
