@@ -90,8 +90,8 @@ CalMirror blocker already present with that title and time is reused rather
 than recreated. Duplicates left by earlier versions are removed on the next
 sync.
 
-Rules can be combined freely. They can be **chained** (A→B, then B→C) and
-they can go **both ways** (A→B and B→A): each blocker records, in its notes,
+Rules can go **both ways** (A→B and B→A). With **Include blocks from other
+rules** enabled, they can also be **chained** (A→B, then B→C): each blocker records, in its notes,
 the calendars it derives from, and a blocker is never mirrored back into one
 of them. Without that guard, two-way rules would bounce blockers between both
 calendars forever.
@@ -107,6 +107,21 @@ Two rules are enforced by design: the **source calendar is never modified**,
 and in the target calendar CalMirror **only touches its own blockers**. Every
 blocker carries a "Managed by CalMirror" tag in its notes, followed by an
 `Origins:` line; anything else in the target calendar is left alone.
+
+### Control chaining
+
+New rules copy only original events. To forward Busy blocks created by other
+rules as well, enable **Include blocks from other rules** in the rule editor,
+or pass `--allow-chaining` to `calmirror rules add`.
+
+Existing rules keep chaining enabled for compatibility. Turn the option off on
+each existing rule to use only original events. On the next sync, previously
+chained copies owned by that rule are removed within its active sync window;
+original events and direct copies remain. Loop protection applies in both modes.
+
+For Personal and Family → both Work calendars, and both Work calendars → Personal,
+create those six rules with the option off. Work events then stay out of the
+other Work calendar, and Family events stay out of Personal.
 
 ### Blocker titles
 
