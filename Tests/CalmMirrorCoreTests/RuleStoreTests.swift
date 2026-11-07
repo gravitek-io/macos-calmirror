@@ -66,6 +66,16 @@ final class RuleStoreTests: XCTestCase {
 
     // MARK: - Tests
 
+    func testCheckedReadRefusesToTreatCorruptRulesAsEmptyForMutation() throws {
+        let original = Data("{broken".utf8)
+        testDefaults.set(original, forKey: MirrorRule.userDefaultsKey)
+        XCTAssertThrowsError(try store.loadRulesChecked())
+        XCTAssertThrowsError(try store.addRule(makeRule()))
+        XCTAssertEqual(testDefaults.data(forKey: MirrorRule.userDefaultsKey), original)
+    }
+
+
+
     /// T018-1: A freshly created store with no prior data returns an empty array.
     func testLoadRulesEmptyByDefault() {
         let rules = store.loadRules()
