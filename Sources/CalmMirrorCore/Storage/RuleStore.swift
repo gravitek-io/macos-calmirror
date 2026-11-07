@@ -5,9 +5,12 @@ import Foundation
 public enum RuleStoreError: Error, LocalizedError {
     /// The requested rule was not found in the store.
     case ruleNotFound(UUID)
+    case unreadable(Error)
 
     public var errorDescription: String? {
         switch self {
+        case .unreadable(let error):
+            return "Saved mirror rules could not be read; no changes were made. \(error.localizedDescription)"
         case .ruleNotFound(let id):
             return "No rule found with id \(id.uuidString)."
         }
@@ -45,13 +48,17 @@ public final class RuleStore: @unchecked Sendable {
     ///
     /// - Returns: The array of persisted mirror rules, or an empty array.
     public func loadRules() -> [MirrorRule] {
+        (try? loadRulesChecked()) ?? []
+    }
+
+    public func loadRulesChecked() throws -> [MirrorRule] {
         guard let data = defaults.data(forKey: MirrorRule.userDefaultsKey) else {
             return []
         }
         do {
             return try JSONDecoder().decode([MirrorRule].self, from: data)
         } catch {
-            return []
+            throw RuleStoreError.unreadable(error)
         }
     }
 
@@ -97,7 +104,7 @@ public final class RuleStore: @unchecked Sendable {
             throw validationError
         }
 
-        var rules = loadRules()
+        var rules = try loadRulesChecked()
         rules.append(rule)
         saveRules(rules)
     }
@@ -110,7 +117,7 @@ public final class RuleStore: @unchecked Sendable {
     /// - Parameter rule: The updated rule (must have the same id as an existing rule).
     /// - Throws: `RuleStoreError.ruleNotFound` if no rule with the given id exists.
     public func updateRule(_ rule: MirrorRule) throws {
-        var rules = loadRules()
+        var rules = try loadRulesChecked()
         guard let index = rules.firstIndex(where: { $0.id == rule.id }) else {
             throw RuleStoreError.ruleNotFound(rule.id)
         }
@@ -125,7 +132,7 @@ public final class RuleStore: @unchecked Sendable {
     /// - Throws: `RuleStoreError.ruleNotFound` if no rule with the given id exists.
     @discardableResult
     public func removeRule(id: UUID) throws -> MirrorRule {
-        var rules = loadRules()
+        var rules = try loadRulesChecked()
         guard let index = rules.firstIndex(where: { $0.id == id }) else {
             throw RuleStoreError.ruleNotFound(id)
         }
@@ -165,12 +172,12 @@ public final class RuleStore: @unchecked Sendable {
     ) throws -> (rule: MirrorRule, blockersRemoved: Int) {
 
         // Verify the rule exists before performing cleanup.
-        guard let _ = loadRules().first(where: { $0.id == id }) else {
+        guard let _ = try loadRulesChecked().first(where: { $0.id == id }) else {
             throw RuleStoreError.ruleNotFound(id)
         }
 
         // Step 1: Load sync records for this rule.
-        let records = syncRecordStore.loadRecords(for: id)
+        let records = try syncRecordStore.loadRecordsChecked(for: id)
 
         // Step 2: Delete each managed blocker event from EventKit.
         var blockersRemoved = 0
@@ -236,7 +243,7 @@ public final class RuleStore: @unchecked Sendable {
     /// - Parameter id: The UUID of the rule to enable.
     /// - Throws: `RuleStoreError.ruleNotFound` if no rule with the given id exists.
     public func enableRule(id: UUID) throws {
-        var rules = loadRules()
+        var rules = try loadRulesChecked()
         guard let index = rules.firstIndex(where: { $0.id == id }) else {
             throw RuleStoreError.ruleNotFound(id)
         }
@@ -250,7 +257,7 @@ public final class RuleStore: @unchecked Sendable {
     /// - Parameter id: The UUID of the rule to disable.
     /// - Throws: `RuleStoreError.ruleNotFound` if no rule with the given id exists.
     public func disableRule(id: UUID) throws {
-        var rules = loadRules()
+        var rules = try loadRulesChecked()
         guard let index = rules.firstIndex(where: { $0.id == id }) else {
             throw RuleStoreError.ruleNotFound(id)
         }

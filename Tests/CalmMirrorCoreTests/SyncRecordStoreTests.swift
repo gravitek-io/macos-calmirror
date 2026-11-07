@@ -47,6 +47,15 @@ final class SyncRecordStoreTests: XCTestCase {
         XCTAssertTrue(records.isEmpty, "Expected empty array for a rule with no persisted file")
     }
 
+    func testCheckedLoadDistinguishesCorruptMappingsFromMissingFile() throws {
+        let ruleID = UUID()
+        XCTAssertNoThrow(try store.loadRecordsChecked(for: ruleID))
+        let file = store.filePath(for: ruleID)
+        try Data("{broken".utf8).write(to: file)
+        XCTAssertThrowsError(try store.loadRecordsChecked(for: ruleID))
+        XCTAssertEqual(try Data(contentsOf: file), Data("{broken".utf8), "A failed read must preserve original bytes")
+    }
+
     /// Records saved for a rule must be recoverable with identical field values.
     func testSaveAndLoadRoundTrip() throws {
         let ruleId = UUID()
