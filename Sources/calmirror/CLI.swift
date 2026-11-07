@@ -718,6 +718,10 @@ extension CalmMirror {
             // allowing the current rule to finish before exiting.
             installSignalHandlers()
 
+            // Serialize the rule snapshot, calendar commits, mappings, and activity writes.
+            let mutationLock = try ProcessMutationLock.acquire(wait: true)
+            defer { mutationLock.release() }
+
             // Load rules from the rule store.
             let ruleStore = RuleStore()
             let allRules = ruleStore.loadRules()
