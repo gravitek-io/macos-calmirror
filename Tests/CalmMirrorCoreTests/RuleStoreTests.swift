@@ -66,6 +66,28 @@ final class RuleStoreTests: XCTestCase {
 
     // MARK: - Tests
 
+    func testBusyMutationLockRejectsRuleChangeAndPreservesSavedState() throws {
+        let lockURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("mutation.lock")
+        defer { try? FileManager.default.removeItem(at: lockURL.deletingLastPathComponent()) }
+        let isolatedStore = RuleStore(defaults: testDefaults, mutationLockURL: lockURL)
+        let rule = makeRule(isEnabled: true)
+        try isolatedStore.addRule(rule)
+        let originalData = try XCTUnwrap(testDefaults.data(forKey: MirrorRule.userDefaultsKey))
+
+        let lock = try ProcessMutationLock.acquire(at: lockURL, wait: true)
+        defer { lock.release() }
+
+        XCTAssertThrowsError(try isolatedStore.disableRule(id: rule.id)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("Another CalMirror operation"))
+        }
+        XCTAssertEqual(testDefaults.data(forKey: MirrorRule.userDefaultsKey), originalData)
+        XCTAssertTrue(isolatedStore.loadRules().first?.isEnabled == true)
+    }
+
+
+
     /// T018-1: A freshly created store with no prior data returns an empty array.
     func testLoadRulesEmptyByDefault() {
         let rules = store.loadRules()
