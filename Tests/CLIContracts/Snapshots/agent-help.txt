@@ -1,0 +1,13 @@
+OVERVIEW: Manage the background sync agent
+
+USAGE: calmirror agent <subcommand>
+
+OPTIONS:
+  -h, --help              Show help information.
+
+SUBCOMMANDS:
+  install                 Install and start the background sync agent
+  uninstall               Stop and remove the background sync agent
+  status (default)        Show the background sync agent status
+
+  See 'calmirror help agent <subcommand>' for detailed help.

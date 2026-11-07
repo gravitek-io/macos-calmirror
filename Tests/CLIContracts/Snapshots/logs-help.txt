@@ -1,0 +1,11 @@
+OVERVIEW: Show sync execution logs
+
+USAGE: calmirror logs [--rule <rule>] [--last <last>] [--json]
+
+OPTIONS:
+  --rule <rule>           Show logs only for the rule with this UUID
+  --last <last>           Number of recent entries to show (1-1000, default 10)
+                          (default: 10)
+  --json                  Output as JSON
+  -h, --help              Show help information.
+

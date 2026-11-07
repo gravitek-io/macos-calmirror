@@ -40,6 +40,7 @@ else
 fi
 
 echo "==> Packaging ${APP_NAME} ${VERSION}"
+"${SCRIPT_DIR}/check-release-metadata.sh"
 
 # ---------------------------------------------------------------------------
 # Build
@@ -47,6 +48,7 @@ echo "==> Packaging ${APP_NAME} ${VERSION}"
 echo "==> Building in release mode..."
 swift build -c release --package-path "$PROJECT_DIR"
 BUILD_DIR="$(swift build -c release --package-path "$PROJECT_DIR" --show-bin-path)"
+CALMIRROR_CLI_BINARY="${BUILD_DIR}/calmirror" "${SCRIPT_DIR}/check-cli-contracts.sh"
 
 # Guard: the shipped CLI must report the version we are packaging.
 CLI_VERSION_OUTPUT="$("${BUILD_DIR}/calmirror" version)"

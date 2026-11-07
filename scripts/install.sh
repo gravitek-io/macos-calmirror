@@ -36,9 +36,11 @@ elif [[ "${1:-}" == "--cli" ]]; then
 fi
 
 echo "==> Building CalMirror in release mode..."
+"${SCRIPT_DIR}/check-release-metadata.sh"
 swift build -c release --package-path "$PROJECT_DIR" 2>&1
 
 BUILD_DIR="$(swift build -c release --package-path "$PROJECT_DIR" --show-bin-path)"
+CALMIRROR_CLI_BINARY="${BUILD_DIR}/calmirror" "${SCRIPT_DIR}/check-cli-contracts.sh"
 
 # ---------------------------------------------------------------------------
 # GUI App Bundle

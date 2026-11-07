@@ -35,19 +35,21 @@ one produces an inconsistent release.
 | File | What to change |
 |------|----------------|
 | `Sources/CalmMirrorApp/Info.plist` | `CFBundleShortVersionString` and `CFBundleVersion` |
-| `Sources/calmirror/CLI.swift` | `print("calmirror X.Y.Z")` in the `Version` command |
+| `Sources/calmirror/CLI.swift` | Uses `CalmMirrorCore.version` for the `Version` command |
 | `Sources/CalmMirrorCore/CalmMirrorCore.swift` | `public static let version = "X.Y.Z"` |
 | `Tests/CalmMirrorCoreTests/CalmMirrorCoreTests.swift` | `testCoreLibraryVersion` asserts the version — keep it in sync |
 
-After bumping, `swift test` must stay green (`testCoreLibraryVersion` guards the
-library version).
+Run `scripts/check-release-metadata.sh` after bumping. It verifies the app
+bundle versions and minimum macOS version against Core and `Package.swift`.
+Then run `swift test` (`testCoreLibraryVersion` guards the library version)
+and `scripts/check-cli-contracts.sh` to check the CLI help/version snapshots
+for all command groups. Packaging and local installation run both checks.
 
 Follow [SemVer](https://semver.org/): bug fixes → patch, backward-compatible
 features → minor, breaking changes → major.
 
-> The packaging script guards against a mismatched **CLI** version, so a
-> forgotten bump fails the workflow instead of publishing a wrong version. It
-> cannot check the other files — update them all.
+> Packaging and local installation both run metadata and CLI contract checks;
+> packaging also verifies the requested release tag against the CLI version.
 
 ## 2. Merge the bump and tag `main`
 

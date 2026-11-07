@@ -1,0 +1,11 @@
+OVERVIEW: Run calendar sync for configured rules
+
+USAGE: calmirror sync [--rule <rule>] [--dry-run] [--json] [--quiet]
+
+OPTIONS:
+  --rule <rule>           Sync only the rule with this UUID
+  --dry-run               Preview changes without writing to EventKit
+  --json                  Output as JSON
+  --quiet                 Suppress all stdout output
+  -h, --help              Show help information.
+

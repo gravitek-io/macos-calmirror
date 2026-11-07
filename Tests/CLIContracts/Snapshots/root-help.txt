@@ -1,0 +1,17 @@
+OVERVIEW: Calendar event mirroring tool for macOS
+
+USAGE: calmirror <subcommand>
+
+OPTIONS:
+  -h, --help              Show help information.
+
+SUBCOMMANDS:
+  version                 Print the current version
+  calendars               List all calendars grouped by account
+  rules                   Manage sync rules
+  sync                    Run calendar sync for configured rules
+  logs                    Show sync execution logs
+  status                  Show CalmMirror system status
+  agent                   Manage the background sync agent
+
+  See 'calmirror help <subcommand>' for detailed help.
