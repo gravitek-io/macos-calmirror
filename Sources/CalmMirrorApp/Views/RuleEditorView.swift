@@ -74,6 +74,7 @@ struct RuleEditorView: View {
     /// Whether blockers use the static `blockerLabel` instead of mirroring the
     /// source event name. New rules default to mirroring the source name.
     @State private var usePlaceholder: Bool = false
+    @State private var allowChaining = false
 
     // MARK: - Calendar Data
 
@@ -121,6 +122,7 @@ struct RuleEditorView: View {
             _windowDays = State(initialValue: rule.windowDays)
             _blockerLabel = State(initialValue: rule.blockerLabel)
             _usePlaceholder = State(initialValue: rule.usePlaceholder)
+            _allowChaining = State(initialValue: rule.allowChaining)
         }
     }
 
@@ -195,6 +197,11 @@ struct RuleEditorView: View {
         Form {
             calendarSection
             configurationSection
+            Section("Sync behavior") {
+                Toggle("Include blocks from other rules", isOn: $allowChaining)
+                Text("When off, the rule copies only original events. Existing chained copies in the sync window are removed on the next sync.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             validationSection
         }
         .formStyle(.grouped)
@@ -390,6 +397,7 @@ struct RuleEditorView: View {
             updated.windowDays = windowDays
             updated.blockerLabel = blockerLabel
             updated.usePlaceholder = usePlaceholder
+            updated.allowChaining = allowChaining
             updated.updatedAt = Date()
 
             // Source and target are immutable (let properties), so they cannot
@@ -419,7 +427,8 @@ struct RuleEditorView: View {
                 targetCalendarIdentifier: targetCalendarID,
                 windowDays: windowDays,
                 blockerLabel: blockerLabel,
-                usePlaceholder: usePlaceholder
+                usePlaceholder: usePlaceholder,
+                allowChaining: allowChaining
             )
 
             do {

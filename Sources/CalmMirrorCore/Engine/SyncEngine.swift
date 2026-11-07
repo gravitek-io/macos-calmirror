@@ -134,10 +134,7 @@ public final class SyncEngine {
         // both calendars forever. Chained rules (A→B, B→C) are unaffected.
         let sourceEvents = allSourceEvents.filter { event in
             event.status != .canceled
-                && !BlockerNotes.wouldLoop(
-                    sourceNotes: event.notes,
-                    targetCalendarIdentifier: rule.targetCalendarIdentifier
-                )
+                && rule.acceptsSource(notes: event.notes)
         }
 
         // ------------------------------------------------------------------

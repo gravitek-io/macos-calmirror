@@ -78,6 +78,9 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
     ///   existed, preserving their original privacy behavior.
     public var usePlaceholder: Bool
 
+    /// Include CalMirror-generated blockers as sources, allowing rules to chain.
+    public var allowChaining: Bool
+
     /// Whether this rule is enabled for automatic sync execution.
     /// Disabled rules are skipped during sync cycles but retain their configuration.
     public var isEnabled: Bool
@@ -99,6 +102,7 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
         windowDays: Int,
         blockerLabel: String,
         usePlaceholder: Bool,
+        allowChaining: Bool = false,
         isEnabled: Bool,
         createdAt: Date,
         updatedAt: Date
@@ -110,6 +114,7 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
         self.windowDays = windowDays
         self.blockerLabel = blockerLabel
         self.usePlaceholder = usePlaceholder
+        self.allowChaining = allowChaining
         self.isEnabled = isEnabled
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -132,7 +137,8 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
         targetCalendarIdentifier: String,
         windowDays: Int,
         blockerLabel: String,
-        usePlaceholder: Bool = false
+        usePlaceholder: Bool = false,
+        allowChaining: Bool = false
     ) {
         let now = Date()
         self.init(
@@ -143,9 +149,19 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
             windowDays: windowDays,
             blockerLabel: blockerLabel,
             usePlaceholder: usePlaceholder,
+            allowChaining: allowChaining,
             isEnabled: true,
             createdAt: now,
             updatedAt: now
+        )
+    }
+
+    /// Applies the rule's source policy while retaining loop protection in chaining mode.
+    func acceptsSource(notes: String?) -> Bool {
+        if !allowChaining && BlockerNotes.isManaged(notes) { return false }
+        return !BlockerNotes.wouldLoop(
+            sourceNotes: notes,
+            targetCalendarIdentifier: targetCalendarIdentifier
         )
     }
 
@@ -180,7 +196,7 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
     /// `title` defaults to `blockerLabel` so legacy rules remain usable.
     private enum CodingKeys: String, CodingKey {
         case id, title, sourceCalendarIdentifier, targetCalendarIdentifier
-        case windowDays, blockerLabel, usePlaceholder, isEnabled, createdAt, updatedAt
+        case windowDays, blockerLabel, usePlaceholder, allowChaining, isEnabled, createdAt, updatedAt
     }
 
     /// Decodes a `MirrorRule` from JSON, falling back to `blockerLabel` for
@@ -197,9 +213,9 @@ public struct MirrorRule: Codable, Identifiable, Hashable, Sendable {
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         // Fall back to blockerLabel when title is missing (pre-existing rules).
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? blockerLabel
-        // Default to placeholder mode when absent so rules persisted before this
-        // field existed keep their original static-label (privacy-preserving)
-        // behavior, rather than silently mirroring source event titles.
+        // Existing rules retain their previous chaining behavior until explicitly edited.
+        allowChaining = try container.decodeIfPresent(Bool.self, forKey: .allowChaining) ?? true
+        // Preserve the static-label behavior of older rules.
         usePlaceholder = try container.decodeIfPresent(Bool.self, forKey: .usePlaceholder) ?? true
     }
 

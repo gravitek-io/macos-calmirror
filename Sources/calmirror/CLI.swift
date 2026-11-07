@@ -442,6 +442,9 @@ extension CalmMirror.Rules {
         @Flag(name: .long, help: "Use a fixed placeholder label instead of mirroring the source event name")
         var usePlaceholder: Bool = false
 
+        @Flag(name: .long, help: "Include CalMirror blocks from other rules; origin loop protection still applies")
+        var allowChaining = false
+
         @Option(name: .long, help: "Fixed label for blocker events (required with --use-placeholder; ignored otherwise)")
         var label: String = ""
 
@@ -497,7 +500,8 @@ extension CalmMirror.Rules {
                 targetCalendarIdentifier: target,
                 windowDays: window,
                 blockerLabel: label,
-                usePlaceholder: usePlaceholder
+                usePlaceholder: usePlaceholder,
+                allowChaining: allowChaining
             )
 
             let store = RuleStore()
