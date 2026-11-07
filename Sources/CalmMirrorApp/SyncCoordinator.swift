@@ -36,6 +36,10 @@ import Observation
 @Observable
 final class SyncCoordinator {
 
+    private struct ActivityReadFailure: Error {
+        let message: String
+    }
+
     // MARK: - Tuning
 
     /// Interval between two polls of the agent state and the log file.
@@ -67,6 +71,7 @@ final class SyncCoordinator {
     /// Set when ``requestSync()`` is called during a run; consumed by the run
     /// loop to start one more run after the current one completes.
     private var rerunRequested = false
+    private var observedLogRevision: SyncLogFileRevision?
 
     // MARK: - Public API
 
@@ -75,14 +80,19 @@ final class SyncCoordinator {
     /// Called on appear and after every run so the views reflect syncs made
     /// by the scheduled agent as well as the ones triggered from the app.
     func refresh() {
-        guard let store = try? SyncLogStore() else {
-            lastSyncDate = nil
-            latestLogByRule = [:]
-            return
+        Task {
+            let result = await Task.detached(priority: .utility) { () -> Result<[UUID: SyncLog], ActivityReadFailure> in
+                do { return .success(try SyncLogStore().latestLogByRuleChecked()) }
+                catch { return .failure(ActivityReadFailure(message: error.localizedDescription)) }
+            }.value
+            switch result {
+            case .success(let latest):
+                latestLogByRule = latest
+                lastSyncDate = latest.values.map(\.timestamp).max()
+            case .failure(let message):
+                lastError = "Sync activity could not be read: \(message.message)"
+            }
         }
-        let latest = store.latestLogByRule()
-        latestLogByRule = latest
-        lastSyncDate = latest.values.map(\.timestamp).max()
     }
 
     /// Asks the agent to sync now.
@@ -139,6 +149,8 @@ final class SyncCoordinator {
             case .timedOut:
                 lastError = "The sync agent did not finish within \(Int(Self.timeout)) seconds. "
                     + "Check `calmirror status` and /tmp/calmirror.stderr.log."
+            case .activityUnavailable(let message):
+                lastError = "The sync agent's activity could not be read: \(message)"
             }
         } while rerunRequested
     }
@@ -149,6 +161,7 @@ final class SyncCoordinator {
         case completed(logs: [SyncLog])
         /// The agent was still running (or never observed) when the timeout expired.
         case timedOut
+        case activityUnavailable(String)
     }
 
     /// Polls the agent state and the log store until the triggered run ends.
@@ -168,7 +181,15 @@ final class SyncCoordinator {
             try? await Task.sleep(for: Self.pollInterval)
 
             let running = await Self.isAgentRunning()
-            let logs = await Self.loadLogs(since: triggeredAt)
+            let logResult = await Self.loadLogs(
+                since: triggeredAt, ifChangedFrom: observedLogRevision
+            )
+            guard case .success(let snapshot) = logResult else {
+                if case .failure(let message) = logResult { return .activityUnavailable(message.message) }
+                return .activityUnavailable("Unknown read error")
+            }
+            observedLogRevision = snapshot.revision
+            let logs = snapshot.logs ?? []
 
             if running {
                 sawRunning = true
@@ -201,9 +222,16 @@ final class SyncCoordinator {
     }
 
     /// Reads the logs appended since the trigger, off the main actor.
-    private static func loadLogs(since date: Date) async -> [SyncLog] {
+    private static func loadLogs(
+        since date: Date,
+        ifChangedFrom revision: SyncLogFileRevision?
+    ) async -> Result<(revision: SyncLogFileRevision, logs: [SyncLog]?), ActivityReadFailure> {
         await Task.detached(priority: .utility) {
-            (try? SyncLogStore())?.loadLogs(since: date) ?? []
+            do {
+                let store = try SyncLogStore()
+                return .success(try store.loadLogsChecked(since: date, ifChangedFrom: revision))
+            }
+            catch { return .failure(ActivityReadFailure(message: error.localizedDescription)) }
         }.value
     }
 

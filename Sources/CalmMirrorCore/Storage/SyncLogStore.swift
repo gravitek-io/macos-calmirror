@@ -1,5 +1,15 @@
 import Foundation
 
+/// Identity of the current rolling log file. Atomic replacement changes the
+/// file number even when size and timestamp happen to match.
+public struct SyncLogFileRevision: Equatable, Sendable {
+    fileprivate let fileNumber: UInt64?
+    fileprivate let byteCount: UInt64
+    fileprivate let modificationTime: Date?
+
+    fileprivate static let missing = SyncLogFileRevision(fileNumber: nil, byteCount: 0, modificationTime: nil)
+}
+
 /// Manages persistence of sync execution logs in a single rolling JSON file.
 ///
 /// All sync executions across all rules are logged to a single file at
@@ -10,6 +20,16 @@ import Foundation
 /// from interrupted writes (e.g., process killed mid-write, system sleep).
 /// Only one sync process runs at a time, so no file locking is needed.
 public final class SyncLogStore {
+
+    public enum ReadError: Error, LocalizedError {
+        case unreadable(URL, Error)
+        public var errorDescription: String? {
+            switch self {
+            case .unreadable(let url, let error):
+                return "Could not read sync activity at \(url.lastPathComponent): \(error.localizedDescription)"
+            }
+        }
+    }
 
     /// Number of days to retain log entries.
     public static let retentionDays: Int = 30
@@ -81,6 +101,10 @@ public final class SyncLogStore {
     ///
     /// - Returns: All persisted sync log entries, ordered as stored on disk.
     public func loadLogs() -> [SyncLog] {
+        (try? loadLogsChecked()) ?? []
+    }
+
+    public func loadLogsChecked() throws -> [SyncLog] {
         guard FileManager.default.fileExists(atPath: logFileURL.path) else {
             return []
         }
@@ -88,7 +112,7 @@ public final class SyncLogStore {
             let data = try Data(contentsOf: logFileURL)
             return try decoder.decode([SyncLog].self, from: data)
         } catch {
-            return []
+            throw ReadError.unreadable(logFileURL, error)
         }
     }
 
@@ -129,8 +153,23 @@ public final class SyncLogStore {
     /// - Parameter date: The inclusive lower bound on `timestamp`.
     /// - Returns: Matching entries, ordered as stored on disk.
     public func loadLogs(since date: Date) -> [SyncLog] {
+        (try? loadLogsChecked(since: date)) ?? []
+    }
+
+    public func loadLogsChecked(since date: Date) throws -> [SyncLog] {
         let bound = Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down))
-        return loadLogs().filter { $0.timestamp >= bound }
+        return try loadLogsChecked().filter { $0.timestamp >= bound }
+    }
+
+    /// Loads newly appended entries only when the underlying atomic log file
+    /// revision changed. A `nil` logs value means the cached snapshot is current.
+    public func loadLogsChecked(
+        since date: Date,
+        ifChangedFrom previousRevision: SyncLogFileRevision?
+    ) throws -> (revision: SyncLogFileRevision, logs: [SyncLog]?) {
+        let revision = try currentFileRevision()
+        guard revision != previousRevision else { return (revision, nil) }
+        return (revision, try loadLogsChecked(since: date))
     }
 
     /// Returns the most recent sync log for every rule that has one.
@@ -141,8 +180,12 @@ public final class SyncLogStore {
     ///
     /// - Returns: A dictionary keyed by rule identifier.
     public func latestLogByRule() -> [UUID: SyncLog] {
+        (try? latestLogByRuleChecked()) ?? [:]
+    }
+
+    public func latestLogByRuleChecked() throws -> [UUID: SyncLog] {
         var latest: [UUID: SyncLog] = [:]
-        for log in loadLogs() {
+        for log in try loadLogsChecked() {
             if let current = latest[log.ruleId], current.timestamp >= log.timestamp {
                 continue
             }
@@ -164,7 +207,7 @@ public final class SyncLogStore {
     /// - Parameter log: The sync log entry to append.
     /// - Throws: If the file cannot be encoded or written.
     public func appendLog(_ log: SyncLog) throws {
-        var logs = loadLogs()
+        var logs = try loadLogsChecked()
         logs.append(log)
         let pruned = Self.pruneEntries(logs)
         try writeLogs(pruned)
@@ -177,7 +220,7 @@ public final class SyncLogStore {
     ///
     /// - Throws: If the file cannot be encoded or written.
     public func pruneOldEntries() throws {
-        let logs = loadLogs()
+        let logs = try loadLogsChecked()
         let pruned = Self.pruneEntries(logs)
         try writeLogs(pruned)
     }
@@ -210,5 +253,21 @@ public final class SyncLogStore {
     private func writeLogs(_ logs: [SyncLog]) throws {
         let data = try encoder.encode(logs)
         try data.write(to: logFileURL, options: .atomic)
+    }
+
+    private func currentFileRevision() throws -> SyncLogFileRevision {
+        do {
+            let attributes = try FileManager.default.attributesOfItem(atPath: logFileURL.path)
+            let fileNumber = (attributes[.systemFileNumber] as? NSNumber)?.uint64Value
+            let byteCount = (attributes[.size] as? NSNumber)?.uint64Value ?? 0
+            let modificationTime = attributes[.modificationDate] as? Date
+            return SyncLogFileRevision(fileNumber: fileNumber, byteCount: byteCount,
+                                       modificationTime: modificationTime)
+        } catch {
+            if !FileManager.default.fileExists(atPath: logFileURL.path) {
+                return .missing
+            }
+            throw ReadError.unreadable(logFileURL, error)
+        }
     }
 }
