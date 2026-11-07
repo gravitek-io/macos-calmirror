@@ -1,0 +1,8 @@
+OVERVIEW: List all calendars grouped by account
+
+USAGE: calmirror calendars [--json]
+
+OPTIONS:
+  --json                  Output as JSON
+  -h, --help              Show help information.
+

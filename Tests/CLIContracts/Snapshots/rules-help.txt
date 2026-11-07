@@ -1,0 +1,15 @@
+OVERVIEW: Manage sync rules
+
+USAGE: calmirror rules <subcommand>
+
+OPTIONS:
+  -h, --help              Show help information.
+
+SUBCOMMANDS:
+  list (default)          List all sync rules
+  add                     Add a new sync rule
+  remove                  Remove a sync rule by UUID
+  enable                  Enable a sync rule by UUID
+  disable                 Disable a sync rule by UUID
+
+  See 'calmirror help rules <subcommand>' for detailed help.

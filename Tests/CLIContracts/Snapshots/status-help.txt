@@ -1,0 +1,8 @@
+OVERVIEW: Show CalmMirror system status
+
+USAGE: calmirror status [--json]
+
+OPTIONS:
+  --json                  Output as JSON
+  -h, --help              Show help information.
+

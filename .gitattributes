@@ -1,0 +1,2 @@
+# CLI help snapshots preserve the command output, including its final blank line.
+Tests/CLIContracts/Snapshots/*.txt whitespace=-blank-at-eof
