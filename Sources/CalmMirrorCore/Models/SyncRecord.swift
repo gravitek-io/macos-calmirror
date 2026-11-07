@@ -9,7 +9,12 @@ public struct SyncRecord: Codable, Identifiable, Sendable {
     /// Derived identifier combining source event identifier and start date for uniqueness.
     /// Format: "{sourceEventIdentifier}_{sourceStartDate.timeIntervalSince1970}"
     public var id: String {
-        "\(sourceEventIdentifier)_\(Int(sourceStartDate.timeIntervalSince1970))"
+        Self.occurrenceID(identifier: sourceEventIdentifier, startDate: sourceStartDate)
+    }
+
+    /// Shared identity for recurring occurrences, retaining persisted key format.
+    static func occurrenceID(identifier: String, startDate: Date) -> String {
+        "\(identifier)_\(Int(startDate.timeIntervalSince1970))"
     }
 
     // MARK: - Source Event

@@ -18,7 +18,7 @@ import Foundation
 /// EKEventStore is not Sendable. The CLI uses serial execution; the GUI
 /// confines access to `@MainActor`. Do not share across unstructured
 /// concurrent contexts.
-public final class CalendarService {
+public final class CalendarService: CalendarAccess {
 
     // MARK: - Singleton
 
@@ -37,6 +37,7 @@ public final class CalendarService {
 
     /// The underlying EventKit store. Only one instance must exist per process.
     private let eventStore: EKEventStore
+    private var eventHandles: [String: EKEvent] = [:]
 
     // MARK: - Initializers
 
@@ -278,9 +279,21 @@ public final class CalendarService {
         try eventStore.commit()
     }
 
+    /// Clears this process's pending EventKit edits after a failed commit.
+    /// Callers must stop using event objects obtained before this reset.
+    public func discardPendingChanges() {
+        eventStore.reset()
+        eventHandles.removeAll()
+    }
+
+    func releaseEventHandles() {
+        eventHandles.removeAll()
+    }
+
     // MARK: - Event Lookup
 
-    /// Finds an event by its device-local identifier.
+    /// Resolves a recorded blocker only when it still belongs to the expected
+    /// destination calendar and carries CalMirror's managed marker.
     ///
     /// This is the primary lookup path. The `eventIdentifier` is stable on a
     /// single device but may change after an Exchange sync or re-provisioning.
@@ -304,4 +317,80 @@ public final class CalendarService {
     public func findEvents(byExternalIdentifier externalId: String) -> [EKCalendarItem] {
         eventStore.calendarItems(withExternalIdentifier: externalId)
     }
+    /// Resolves a managed blocker in the expected target calendar. External-ID
+    /// fallback rejects multiple valid matches instead of choosing one.
+    func resolveBlocker(for record: SyncRecord, in target: CalendarDescriptor) throws -> BlockerResolution {
+        guard eventStore.calendar(withIdentifier: target.identifier) != nil else {
+            throw CalendarAccessError.calendarUnavailable(target.identifier)
+        }
+        if let event = findEvent(byIdentifier: record.blockerEventIdentifier) {
+            return validateManaged(event, in: target)
+        }
+        let candidates = findEvents(byExternalIdentifier: record.blockerExternalIdentifier)
+            .compactMap { $0 as? EKEvent }
+        let valid = candidates.filter { event in
+            event.calendar?.calendarIdentifier == target.identifier
+                && BlockerNotes.isManaged(event.notes)
+        }
+        if valid.count == 1, let event = valid.first { return .found(snapshot(event)) }
+        if valid.count > 1 { return .ambiguous }
+        if candidates.contains(where: { $0.calendar?.calendarIdentifier != target.identifier }) {
+            return .foreign
+        }
+        if !candidates.isEmpty { return .untagged }
+        return .missing
+    }
+
+    private func validateManaged(_ event: EKEvent, in target: CalendarDescriptor) -> BlockerResolution {
+        guard event.calendar?.calendarIdentifier == target.identifier else { return .foreign }
+        guard BlockerNotes.isManaged(event.notes) else { return .untagged }
+        return .found(snapshot(event))
+    }
+
+    func calendarDescriptor(withIdentifier id: String) -> CalendarDescriptor? {
+        guard let calendar = eventStore.calendar(withIdentifier: id) else { return nil }
+        return CalendarDescriptor(identifier: calendar.calendarIdentifier, title: calendar.title,
+                                  allowsContentModifications: calendar.allowsContentModifications)
+    }
+
+    func fetchEvents(in calendar: CalendarDescriptor, from startDate: Date, to endDate: Date,
+                     retainHandles: Bool = false) throws -> [CalendarEventSnapshot] {
+        guard let eventCalendar = eventStore.calendar(withIdentifier: calendar.identifier) else {
+            throw CalendarAccessError.calendarUnavailable(calendar.identifier)
+        }
+        return fetchEvents(in: eventCalendar, from: startDate, to: endDate)
+            .map { snapshot($0, retainHandle: retainHandles && BlockerNotes.isManaged($0.notes)) }
+    }
+
+    func createBlockerEvent(in calendar: CalendarDescriptor, title: String, startDate: Date,
+                            endDate: Date, isAllDay: Bool, notes: String, commit: Bool) throws -> CalendarEventSnapshot {
+        guard let eventCalendar = eventStore.calendar(withIdentifier: calendar.identifier) else {
+            throw CalendarAccessError.calendarUnavailable(calendar.identifier)
+        }
+        return snapshot(try createBlockerEvent(in: eventCalendar, title: title, startDate: startDate,
+            endDate: endDate, isAllDay: isAllDay, notes: notes, commit: commit), retainHandle: true)
+    }
+
+    func updateBlockerEvent(_ event: CalendarEventSnapshot, title: String, startDate: Date,
+                            endDate: Date, isAllDay: Bool, notes: String, commit: Bool) throws {
+        guard let backing = eventHandles[event.handle] else { throw CalendarAccessError.eventUnavailable }
+        try updateBlockerEvent(backing, title: title, startDate: startDate,
+            endDate: endDate, isAllDay: isAllDay, notes: notes, commit: commit)
+    }
+
+    func deleteEvent(_ event: CalendarEventSnapshot, commit: Bool) throws {
+        guard let backing = eventHandles[event.handle] else { throw CalendarAccessError.eventUnavailable }
+        try deleteEvent(backing, commit: commit)
+    }
+
+    private func snapshot(_ event: EKEvent, retainHandle: Bool = true) -> CalendarEventSnapshot {
+        let handle = retainHandle ? UUID().uuidString : ""
+        if retainHandle { eventHandles[handle] = event }
+        return CalendarEventSnapshot(handle: handle, identifier: event.eventIdentifier ?? "",
+            externalIdentifier: event.calendarItemExternalIdentifier ?? "",
+            calendarIdentifier: event.calendar?.calendarIdentifier ?? "", title: event.title,
+            startDate: event.startDate, endDate: event.endDate, isAllDay: event.isAllDay,
+            notes: event.notes, isCanceled: event.status == .canceled)
+    }
+
 }
