@@ -80,6 +80,26 @@ final class SyncLogStoreTests: XCTestCase {
         XCTAssertTrue(logs.isEmpty, "A new store should contain no logs")
     }
 
+    func testAppendingDoesNotOverwriteCorruptLogFile() throws {
+        let url = tempDirectory.appendingPathComponent("sync-logs.json")
+        let original = Data("{broken".utf8)
+        try original.write(to: url)
+        XCTAssertThrowsError(try store.appendLog(makeSyncLog()))
+        XCTAssertEqual(try Data(contentsOf: url), original)
+    }
+
+    func testRevisionPollingSkipsFullDecodeUntilAtomicLogReplacement() throws {
+        let first = try store.loadLogsChecked(since: .distantPast, ifChangedFrom: nil)
+        XCTAssertTrue(first.logs?.isEmpty == true)
+        let unchanged = try store.loadLogsChecked(since: .distantPast, ifChangedFrom: first.revision)
+        XCTAssertNil(unchanged.logs)
+
+        try store.appendLog(makeSyncLog())
+        let changed = try store.loadLogsChecked(since: .distantPast, ifChangedFrom: unchanged.revision)
+        XCTAssertEqual(changed.logs?.count, 1)
+        XCTAssertNotEqual(changed.revision, unchanged.revision)
+    }
+
     /// Appending a single log and loading it back should return that exact entry.
     func testAppendAndLoad() throws {
         let ruleId = UUID()
